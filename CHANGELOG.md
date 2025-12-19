@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2](https://github.com/Polymarket/rs-clob-client/compare/v0.1.1...v0.1.2) - 2025-12-19
+
+### Fixed
+
+- mask salt for limit orders ([#30](https://github.com/Polymarket/rs-clob-client/pull/30))
+- mask salt to 53 bits ([#27](https://github.com/Polymarket/rs-clob-client/pull/27))
+
 ## [0.1.1](https://github.com/Polymarket/rs-clob-client/compare/v0.1.0...v0.1.1) - 2025-12-17
 
 ### Fixed
