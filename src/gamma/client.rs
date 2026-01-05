@@ -191,11 +191,15 @@ impl Client {
 
     /// Gets a tag by ID.
     pub async fn tag_by_id(&self, request: &TagByIdRequest) -> Result<Tag> {
+        crate::check!(self, key: "gamma_tags", quota: "200/10s");
+
         self.get(&format!("tags/{}", request.id), request).await
     }
 
     /// Gets a tag by slug.
     pub async fn tag_by_slug(&self, request: &TagBySlugRequest) -> Result<Tag> {
+        crate::check!(self, key: "gamma_tags", quota: "200/10s");
+
         self.get(&format!("tags/slug/{}", request.slug), request)
             .await
     }
@@ -205,6 +209,8 @@ impl Client {
         &self,
         request: &RelatedTagsByIdRequest,
     ) -> Result<Vec<RelatedTag>> {
+        crate::check!(self, key: "gamma_tags", quota: "200/10s");
+
         self.get(&format!("tags/{}/related-tags", request.id), request)
             .await
     }
@@ -214,6 +220,8 @@ impl Client {
         &self,
         request: &RelatedTagsBySlugRequest,
     ) -> Result<Vec<RelatedTag>> {
+        crate::check!(self, key: "gamma_tags", quota: "200/10s");
+
         self.get(&format!("tags/slug/{}/related-tags", request.slug), request)
             .await
     }
@@ -223,6 +231,8 @@ impl Client {
         &self,
         request: &RelatedTagsByIdRequest,
     ) -> Result<Vec<Tag>> {
+        crate::check!(self, key: "gamma_tags", quota: "200/10s");
+
         self.get(&format!("tags/{}/related-tags/tags", request.id), request)
             .await
     }
@@ -232,6 +242,8 @@ impl Client {
         &self,
         request: &RelatedTagsBySlugRequest,
     ) -> Result<Vec<Tag>> {
+        crate::check!(self, key: "gamma_tags", quota: "200/10s");
+
         self.get(
             &format!("tags/slug/{}/related-tags/tags", request.slug),
             request,
@@ -248,11 +260,15 @@ impl Client {
 
     /// Gets an event by ID.
     pub async fn event_by_id(&self, request: &EventByIdRequest) -> Result<Event> {
+        crate::check!(self, key: "gamma_events", quota: "500/10s");
+
         self.get(&format!("events/{}", request.id), request).await
     }
 
     /// Gets an event by slug.
     pub async fn event_by_slug(&self, request: &EventBySlugRequest) -> Result<Event> {
+        crate::check!(self, key: "gamma_events", quota: "500/10s");
+
         self.get(&format!("events/slug/{}", request.slug), request)
             .await
     }
