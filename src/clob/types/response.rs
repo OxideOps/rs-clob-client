@@ -282,6 +282,7 @@ pub struct PostOrderResponse {
 ///
 /// This is returned by [`Client::prepare_for_external_signing`] and contains everything
 /// needed for a browser wallet to sign an order via `eth_signTypedData_v4`.
+#[non_exhaustive]
 #[derive(Debug, Clone, Serialize)]
 pub struct ExternalSigningData {
     /// EIP-712 typed data JSON string, ready to be passed to `eth_signTypedData_v4`.

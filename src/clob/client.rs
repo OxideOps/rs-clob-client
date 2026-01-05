@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use std::mem;
 use std::sync::Arc;
 
-use alloy::dyn_abi::Eip712Domain;
+use alloy::dyn_abi::{Eip712Domain, TypedData};
 use alloy::primitives::U256;
 use alloy::signers::Signer;
 use alloy::sol_types::SolStruct as _;
@@ -1040,60 +1040,25 @@ impl<K: Kind> Client<Authenticated<K>> {
             .ok_or(Error::missing_contract_config(chain_id, neg_risk))?
             .exchange;
 
+        let domain = Eip712Domain {
+            name: ORDER_NAME,
+            version: VERSION,
+            chain_id: Some(U256::from(chain_id)),
+            verifying_contract: Some(exchange_contract),
+            ..Eip712Domain::default()
+        };
+
+        // Use alloy's TypedData to generate the EIP-712 JSON structure
+        let typed_data = TypedData::from_struct(&signable.order, Some(domain));
+        let typed_data_json = serde_json::to_string(&typed_data)
+            .map_err(|e| Error::validation(format!("Failed to serialize typed data: {e}")))?;
+
+        // Serialize order data for round-tripping to post_externally_signed_order
         let order = &signable.order;
-
-        // Construct EIP-712 typed data for wallet signing
-        let typed_data = json!({
-            "types": {
-                "EIP712Domain": [
-                    { "name": "name", "type": "string" },
-                    { "name": "version", "type": "string" },
-                    { "name": "chainId", "type": "uint256" },
-                    { "name": "verifyingContract", "type": "address" }
-                ],
-                "Order": [
-                    { "name": "salt", "type": "uint256" },
-                    { "name": "maker", "type": "address" },
-                    { "name": "signer", "type": "address" },
-                    { "name": "taker", "type": "address" },
-                    { "name": "tokenId", "type": "uint256" },
-                    { "name": "makerAmount", "type": "uint256" },
-                    { "name": "takerAmount", "type": "uint256" },
-                    { "name": "expiration", "type": "uint256" },
-                    { "name": "nonce", "type": "uint256" },
-                    { "name": "feeRateBps", "type": "uint256" },
-                    { "name": "side", "type": "uint8" },
-                    { "name": "signatureType", "type": "uint8" }
-                ]
-            },
-            "domain": {
-                "name": ORDER_NAME.as_ref().map(|s| s.as_ref()),
-                "version": VERSION.as_ref().map(|s| s.as_ref()),
-                "chainId": chain_id.to_string(),
-                "verifyingContract": format!("{:?}", exchange_contract)
-            },
-            "primaryType": "Order",
-            "message": {
-                "salt": format!("{}", order.salt),
-                "maker": format!("{:?}", order.maker),
-                "signer": format!("{:?}", order.signer),
-                "taker": format!("{:?}", order.taker),
-                "tokenId": format!("{}", order.tokenId),
-                "makerAmount": format!("{}", order.makerAmount),
-                "takerAmount": format!("{}", order.takerAmount),
-                "expiration": format!("{}", order.expiration),
-                "nonce": format!("{}", order.nonce),
-                "feeRateBps": format!("{}", order.feeRateBps),
-                "side": order.side,
-                "signatureType": order.signatureType
-            }
-        });
-
-        // Serialize order data for round-tripping
-        // Convert salt to u64 for JSON number (CLOB expects salt as number)
-        let salt_u64: u64 = order.salt.try_into().map_err(|_| {
-            Error::validation("salt does not fit into u64")
-        })?;
+        let salt_u64: u64 = order
+            .salt
+            .try_into()
+            .map_err(|_err| Error::validation("salt does not fit into u64"))?;
 
         let order_data = json!({
             "order": {
@@ -1114,7 +1079,7 @@ impl<K: Kind> Client<Authenticated<K>> {
         });
 
         Ok(ExternalSigningData {
-            typed_data: typed_data.to_string(),
+            typed_data: typed_data_json,
             order_data: order_data.to_string(),
         })
     }
@@ -1171,18 +1136,21 @@ impl<K: Kind> Client<Authenticated<K>> {
         // Inject signature into the order object
         if let Some(order_obj) = order.get_mut("order") {
             if let Some(map) = order_obj.as_object_mut() {
-                map.insert("signature".to_owned(), serde_json::Value::String(signature.to_owned()));
+                map.insert(
+                    "signature".to_owned(),
+                    serde_json::Value::String(signature.to_owned()),
+                );
 
                 // Convert numeric side to string if needed (CLOB expects "BUY"/"SELL")
-                if let Some(side_value) = map.get_mut("side") {
-                    if let Some(side_num) = side_value.as_u64() {
-                        let side_str = match side_num {
-                            0 => "BUY",
-                            1 => "SELL",
-                            _ => return Err(Error::validation("side must be 0 or 1")),
-                        };
-                        *side_value = serde_json::Value::String(side_str.to_owned());
-                    }
+                if let Some(side_value) = map.get_mut("side")
+                    && let Some(side_num) = side_value.as_u64()
+                {
+                    let side_str = match side_num {
+                        0 => "BUY",
+                        1 => "SELL",
+                        _ => return Err(Error::validation("side must be 0 or 1")),
+                    };
+                    *side_value = serde_json::Value::String(side_str.to_owned());
                 }
             }
         } else {
