@@ -26,7 +26,6 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use crate::error::Error;
-use crate::http::rate_limit;
 use crate::types::{Address, address};
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -136,7 +135,7 @@ impl<T: Serialize> ToQueryParams for T {}
     feature = "tracing",
     tracing::instrument(
         level = "debug",
-        skip(client, request, headers, rate_limiters),
+        skip(client, request, headers),
         fields(method, path, status_code)
     )
 )]
@@ -144,7 +143,6 @@ async fn request<Response: DeserializeOwned>(
     client: &reqwest::Client,
     mut request: Request,
     headers: Option<HeaderMap>,
-    #[cfg(feature = "rate-limiting")] rate_limiters: Option<&rate_limit::RateLimiters>,
 ) -> Result<Response> {
     let method = request.method().clone();
     let path = request.url().path().to_owned();
@@ -154,13 +152,6 @@ async fn request<Response: DeserializeOwned>(
         let span = tracing::Span::current();
         span.record("method", method.as_str());
         span.record("path", path.as_str());
-    }
-
-    // Check rate limits before making the request
-    #[cfg(feature = "rate-limiting")]
-    if let Some(limiters) = rate_limiters {
-        let (api_type, endpoint) = rate_limit::detect_endpoint(request.url(), request.method());
-        rate_limit::check(limiters, api_type, endpoint).await?;
     }
 
     if let Some(h) = headers {

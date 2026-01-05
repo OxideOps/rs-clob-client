@@ -47,6 +47,7 @@ use super::types::response::{
     SportsMarketTypesResponse, SportsMetadata, Tag, Team,
 };
 use crate::error::Error;
+#[cfg(feature = "rate-limiting")]
 use crate::http::rate_limit;
 use crate::{Result, ToQueryParams as _};
 
@@ -99,7 +100,7 @@ impl Client {
     /// Returns an error if the URL is invalid or the HTTP client cannot be created.
     pub fn new(
         host: &str,
-        #[cfg(feature = "rate-limiting")] rate_limit_config: Option<&rate_limit::Config>,
+        #[cfg(feature = "rate-limiting")] global_rate_limit: Option<governor::Quota>,
         #[cfg(not(feature = "rate-limiting"))] _rate_limit_config: Option<()>,
     ) -> Result<Client> {
         let mut headers = HeaderMap::new();
@@ -112,7 +113,7 @@ impl Client {
 
         #[cfg(feature = "rate-limiting")]
         let rate_limiters =
-            rate_limit_config.map(|cfg| Arc::new(rate_limit::RateLimiters::new(cfg)));
+            global_rate_limit.map(|quota| Arc::new(rate_limit::RateLimiters::with_global(quota)));
 
         Ok(Self {
             host: Url::parse(host)?,
@@ -138,14 +139,7 @@ impl Client {
             .client
             .request(Method::GET, format!("{}{path}{query}", self.host))
             .build()?;
-        crate::request(
-            &self.client,
-            request,
-            None,
-            #[cfg(feature = "rate-limiting")]
-            self.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.client, request, None).await
     }
 
     /// Performs a health check on the API.
@@ -285,14 +279,7 @@ impl Client {
             .client
             .request(Method::GET, format!("{}markets{query}", self.host))
             .build()?;
-        crate::request(
-            &self.client,
-            req,
-            None,
-            #[cfg(feature = "rate-limiting")]
-            self.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.client, req, None).await
     }
 
     /// Gets a market by ID.

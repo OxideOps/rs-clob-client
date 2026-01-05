@@ -8,6 +8,7 @@ use url::Url;
 
 use super::types::{DepositRequest, DepositResponse, SupportedAssetsResponse};
 use crate::Result;
+#[cfg(feature = "rate-limiting")]
 use crate::http::rate_limit;
 
 /// Client for the Polymarket Bridge API.
@@ -64,7 +65,7 @@ impl Client {
     /// Returns an error if the host URL is invalid or the HTTP client fails to build.
     pub fn new(
         host: &str,
-        #[cfg(feature = "rate-limiting")] rate_limit_config: Option<&rate_limit::Config>,
+        #[cfg(feature = "rate-limiting")] global_rate_limit: Option<governor::Quota>,
         #[cfg(not(feature = "rate-limiting"))] _rate_limit_config: Option<()>,
     ) -> Result<Client> {
         let mut headers = HeaderMap::new();
@@ -77,7 +78,7 @@ impl Client {
 
         #[cfg(feature = "rate-limiting")]
         let rate_limiters =
-            rate_limit_config.map(|cfg| Arc::new(rate_limit::RateLimiters::new(cfg)));
+            global_rate_limit.map(|quota| Arc::new(rate_limit::RateLimiters::with_global(quota)));
 
         Ok(Self {
             host: Url::parse(host)?,
@@ -129,14 +130,7 @@ impl Client {
             .json(request)
             .build()?;
 
-        crate::request(
-            &self.client,
-            request,
-            None,
-            #[cfg(feature = "rate-limiting")]
-            self.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.client, request, None).await
     }
 
     /// Get all supported chains and tokens for deposits.
@@ -171,13 +165,6 @@ impl Client {
             .request(Method::GET, format!("{}supported-assets", self.host()))
             .build()?;
 
-        crate::request(
-            &self.client,
-            request,
-            None,
-            #[cfg(feature = "rate-limiting")]
-            self.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.client, request, None).await
     }
 }

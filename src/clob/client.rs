@@ -40,6 +40,7 @@ use crate::clob::types::response::{
 };
 use crate::clob::types::{SignableOrder, SignatureType, SignedOrder, TickSize};
 use crate::error::{Error, Synchronization};
+#[cfg(feature = "rate-limiting")]
 use crate::http::rate_limit;
 use crate::types::Address;
 use crate::{AMOY, POLYGON, Result, Timestamp, ToQueryParams as _, auth, contract_config};
@@ -264,11 +265,12 @@ pub struct Config {
     /// This is primarily useful for testing.
     #[builder(into)]
     geoblock_host: Option<String>,
-    /// Rate limiting configuration. When enabled (with the `rate-limiting` feature flag),
-    /// this controls request rate limits according to Polymarket's documented limits.
-    /// Defaults to `None` (no rate limiting).
+    /// Optional global rate limit quota. When enabled (with the `rate-limiting` feature flag),
+    /// this applies a global rate limit across all CLOB requests. Use `quota_10s(15000)` for
+    /// Polymarket's 15k/10s global limit. Endpoint-specific limits are declared via `#[rate_limit]`.
+    /// Defaults to `None` (no global limit).
     #[cfg(feature = "rate-limiting")]
-    pub rate_limit_config: Option<rate_limit::Config>,
+    pub global_rate_limit: Option<governor::Quota>,
 }
 
 /// The default geoblock API host (separate from CLOB host)
@@ -311,14 +313,7 @@ impl<S: State> ClientInner<S> {
             .request(Method::GET, format!("{}time", self.host))
             .build()?;
 
-        crate::request(
-            &self.client,
-            request,
-            None,
-            #[cfg(feature = "rate-limiting")]
-            self.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.client, request, None).await
     }
 }
 
@@ -334,14 +329,7 @@ impl ClientInner<Unauthenticated> {
             .build()?;
         let headers = self.create_headers(signer, nonce).await?;
 
-        crate::request(
-            &self.client,
-            request,
-            Some(headers),
-            #[cfg(feature = "rate-limiting")]
-            self.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.client, request, Some(headers)).await
     }
 
     pub async fn derive_api_key<S: Signer>(
@@ -355,14 +343,7 @@ impl ClientInner<Unauthenticated> {
             .build()?;
         let headers = self.create_headers(signer, nonce).await?;
 
-        crate::request(
-            &self.client,
-            request,
-            Some(headers),
-            #[cfg(feature = "rate-limiting")]
-            self.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.client, request, Some(headers)).await
     }
 
     async fn create_or_derive_api_key<S: Signer>(
@@ -409,14 +390,7 @@ impl<S: State> Client<S> {
             .request(Method::GET, self.host().to_owned())
             .build()?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            None,
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, None).await
     }
 
     pub async fn server_time(&self) -> Result<Timestamp> {
@@ -424,20 +398,15 @@ impl<S: State> Client<S> {
     }
 
     pub async fn midpoint(&self, request: &MidpointRequest) -> Result<MidpointResponse> {
+        crate::check!(self.inner, key: "clob_midpoint", quota: "1500/10s");
+
         let request = self
             .client()
             .request(Method::GET, format!("{}midpoint", self.host()))
             .query(&[("token_id", request.token_id.as_str())])
             .build()?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            None,
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, None).await
     }
 
     pub async fn midpoints(&self, requests: &[MidpointRequest]) -> Result<MidpointsResponse> {
@@ -447,17 +416,12 @@ impl<S: State> Client<S> {
             .json(requests)
             .build()?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            None,
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, None).await
     }
 
     pub async fn price(&self, request: &PriceRequest) -> Result<PriceResponse> {
+        crate::check!(self.inner, key: "clob_price", quota: "1500/10s");
+
         let request = self
             .client()
             .request(Method::GET, format!("{}price", self.host()))
@@ -467,14 +431,7 @@ impl<S: State> Client<S> {
             ])
             .build()?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            None,
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, None).await
     }
 
     pub async fn prices(&self, requests: &[PriceRequest]) -> Result<PricesResponse> {
@@ -484,14 +441,7 @@ impl<S: State> Client<S> {
             .json(requests)
             .build()?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            None,
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, None).await
     }
 
     pub async fn all_prices(&self) -> Result<PricesResponse> {
@@ -500,14 +450,7 @@ impl<S: State> Client<S> {
             .request(Method::GET, format!("{}prices", self.host()))
             .build()?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            None,
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, None).await
     }
 
     pub async fn price_history(
@@ -534,14 +477,7 @@ impl<S: State> Client<S> {
             req = req.query(&[("fidelity", fidelity)]);
         }
 
-        crate::request(
-            &self.inner.client,
-            req.build()?,
-            None,
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, req.build()?, None).await
     }
 
     pub async fn spread(&self, request: &SpreadRequest) -> Result<SpreadResponse> {
@@ -551,14 +487,7 @@ impl<S: State> Client<S> {
             .query(&[("token_id", request.token_id.as_str())])
             .build()?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            None,
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, None).await
     }
 
     pub async fn spreads(&self, requests: &[SpreadRequest]) -> Result<SpreadsResponse> {
@@ -568,14 +497,7 @@ impl<S: State> Client<S> {
             .json(requests)
             .build()?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            None,
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, None).await
     }
 
     pub async fn tick_size(&self, token_id: &str) -> Result<TickSizeResponse> {
@@ -596,14 +518,8 @@ impl<S: State> Client<S> {
             .query(&[("token_id", token_id)])
             .build()?;
 
-        let response = crate::request::<TickSizeResponse>(
-            &self.inner.client,
-            request,
-            None,
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await?;
+        let response =
+            crate::request::<TickSizeResponse>(&self.inner.client, request, None).await?;
 
         self.inner
             .tick_sizes
@@ -633,14 +549,7 @@ impl<S: State> Client<S> {
             .query(&[("token_id", token_id)])
             .build()?;
 
-        let response = crate::request::<NegRiskResponse>(
-            &self.inner.client,
-            request,
-            None,
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await?;
+        let response = crate::request::<NegRiskResponse>(&self.inner.client, request, None).await?;
 
         self.inner
             .neg_risk
@@ -670,14 +579,7 @@ impl<S: State> Client<S> {
             .query(&[("token_id", token_id)])
             .build()?;
 
-        let response = crate::request::<FeeRateResponse>(
-            &self.inner.client,
-            request,
-            None,
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await?;
+        let response = crate::request::<FeeRateResponse>(&self.inner.client, request, None).await?;
 
         self.inner
             .fee_rate_bps
@@ -742,54 +644,37 @@ impl<S: State> Client<S> {
             )
             .build()?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            None,
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, None).await
     }
 
     pub async fn order_book(
         &self,
         request: &OrderBookSummaryRequest,
     ) -> Result<OrderBookSummaryResponse> {
+        crate::check!(self.inner, key: "clob_book", quota: "1500/10s");
+
         let request = self
             .client()
             .request(Method::GET, format!("{}book", self.host()))
             .query(&[("token_id", request.token_id.as_str())])
             .build()?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            None,
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, None).await
     }
 
     pub async fn order_books(
         &self,
         requests: &[OrderBookSummaryRequest],
     ) -> Result<Vec<OrderBookSummaryResponse>> {
+        crate::check!(self.inner, key: "clob_book", quota: "1500/10s");
+
         let request = self
             .client()
             .request(Method::POST, format!("{}books", self.host()))
             .json(requests)
             .build()?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            None,
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, None).await
     }
 
     pub async fn last_trade_price(
@@ -802,14 +687,7 @@ impl<S: State> Client<S> {
             .query(&[("token_id", request.token_id.as_str())])
             .build()?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            None,
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, None).await
     }
 
     pub async fn last_trades_prices(
@@ -822,14 +700,7 @@ impl<S: State> Client<S> {
             .json(token_ids)
             .build()?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            None,
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, None).await
     }
 
     pub async fn market(&self, condition_id: &str) -> Result<MarketResponse> {
@@ -841,14 +712,7 @@ impl<S: State> Client<S> {
             )
             .build()?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            None,
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, None).await
     }
 
     pub async fn markets(&self, next_cursor: Option<String>) -> Result<Page<MarketResponse>> {
@@ -858,14 +722,7 @@ impl<S: State> Client<S> {
             .request(Method::GET, format!("{}markets{cursor}", self.host()))
             .build()?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            None,
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, None).await
     }
 
     pub async fn sampling_markets(
@@ -881,14 +738,7 @@ impl<S: State> Client<S> {
             )
             .build()?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            None,
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, None).await
     }
 
     pub async fn simplified_markets(
@@ -904,14 +754,7 @@ impl<S: State> Client<S> {
             )
             .build()?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            None,
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, None).await
     }
 
     pub async fn sampling_simplified_markets(
@@ -927,14 +770,7 @@ impl<S: State> Client<S> {
             )
             .build()?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            None,
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, None).await
     }
 
     /// Returns a stream of results, using `self` to repeatedly invoke the provided closure,
@@ -993,9 +829,8 @@ impl Client<Unauthenticated> {
 
         #[cfg(feature = "rate-limiting")]
         let rate_limiters = config
-            .rate_limit_config
-            .as_ref()
-            .map(|cfg| Arc::new(rate_limit::RateLimiters::new(cfg)));
+            .global_rate_limit
+            .map(|quota| Arc::new(rate_limit::RateLimiters::with_global(quota)));
 
         Ok(Self {
             inner: Arc::new(ClientInner {
@@ -1107,14 +942,7 @@ impl<K: Kind> Client<Authenticated<K>> {
             .build()?;
         let headers = self.create_headers(&request).await?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            Some(headers),
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, Some(headers)).await
     }
 
     pub async fn delete_api_key(&self) -> Result<serde_json::Value> {
@@ -1124,14 +952,7 @@ impl<K: Kind> Client<Authenticated<K>> {
             .build()?;
         let headers = self.create_headers(&request).await?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            Some(headers),
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, Some(headers)).await
     }
 
     pub async fn closed_only_mode(&self) -> Result<BanStatusResponse> {
@@ -1144,14 +965,7 @@ impl<K: Kind> Client<Authenticated<K>> {
             .build()?;
         let headers = self.create_headers(&request).await?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            Some(headers),
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, Some(headers)).await
     }
 
     /// Creates an [`OrderBuilder<Limit, K>`] used to construct a limit order.
@@ -1208,6 +1022,8 @@ impl<K: Kind> Client<Authenticated<K>> {
     }
 
     pub async fn post_order(&self, order: SignedOrder) -> Result<PostOrderResponse> {
+        crate::check!(self.inner, key: "clob_post_order", burst: "3500/10s", sustained: "36000/10m");
+
         let request = self
             .client()
             .request(Method::POST, format!("{}order", self.host()))
@@ -1215,14 +1031,7 @@ impl<K: Kind> Client<Authenticated<K>> {
             .build()?;
         let headers = self.create_headers(&request).await?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            Some(headers),
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, Some(headers)).await
     }
 
     pub async fn post_orders(&self, orders: Vec<SignedOrder>) -> Result<Vec<PostOrderResponse>> {
@@ -1233,14 +1042,7 @@ impl<K: Kind> Client<Authenticated<K>> {
             .build()?;
         let headers = self.create_headers(&request).await?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            Some(headers),
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, Some(headers)).await
     }
 
     /// Attempts to return the corresponding order at the provided `order_id`
@@ -1251,14 +1053,7 @@ impl<K: Kind> Client<Authenticated<K>> {
             .build()?;
         let headers = self.create_headers(&request).await?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            Some(headers),
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, Some(headers)).await
     }
 
     pub async fn orders(
@@ -1273,17 +1068,12 @@ impl<K: Kind> Client<Authenticated<K>> {
             .build()?;
         let headers = self.create_headers(&request).await?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            Some(headers),
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, Some(headers)).await
     }
 
     pub async fn cancel_order(&self, order_id: &str) -> Result<CancelOrdersResponse> {
+        crate::check!(self.inner, key: "clob_cancel_order", burst: "3000/10s", sustained: "30000/10m");
+
         let request = self
             .client()
             .request(Method::DELETE, format!("{}order", self.host()))
@@ -1291,14 +1081,7 @@ impl<K: Kind> Client<Authenticated<K>> {
             .build()?;
         let headers = self.create_headers(&request).await?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            Some(headers),
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, Some(headers)).await
     }
 
     pub async fn cancel_orders(&self, order_ids: &[&str]) -> Result<CancelOrdersResponse> {
@@ -1309,14 +1092,7 @@ impl<K: Kind> Client<Authenticated<K>> {
             .build()?;
         let headers = self.create_headers(&request).await?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            Some(headers),
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, Some(headers)).await
     }
 
     pub async fn cancel_all_orders(&self) -> Result<CancelOrdersResponse> {
@@ -1326,14 +1102,7 @@ impl<K: Kind> Client<Authenticated<K>> {
             .build()?;
         let headers = self.create_headers(&request).await?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            Some(headers),
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, Some(headers)).await
     }
 
     /// Attempts to cancel all open orders for a particular [`CancelMarketOrderRequest::market`]
@@ -1352,14 +1121,7 @@ impl<K: Kind> Client<Authenticated<K>> {
             .build()?;
         let headers = self.create_headers(&request).await?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            Some(headers),
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, Some(headers)).await
     }
 
     pub async fn trades(
@@ -1374,14 +1136,7 @@ impl<K: Kind> Client<Authenticated<K>> {
             .build()?;
         let headers = self.create_headers(&request).await?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            Some(headers),
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, Some(headers)).await
     }
 
     pub async fn notifications(&self) -> Result<Vec<NotificationResponse>> {
@@ -1392,14 +1147,7 @@ impl<K: Kind> Client<Authenticated<K>> {
             .build()?;
         let headers = self.create_headers(&request).await?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            Some(headers),
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, Some(headers)).await
     }
 
     pub async fn delete_notifications(&self, request: &DeleteNotificationsRequest) -> Result<()> {
@@ -1440,14 +1188,7 @@ impl<K: Kind> Client<Authenticated<K>> {
             .build()?;
         let headers = self.create_headers(&request).await?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            Some(headers),
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, Some(headers)).await
     }
 
     pub async fn update_balance_allowance(
@@ -1485,14 +1226,7 @@ impl<K: Kind> Client<Authenticated<K>> {
             .build()?;
         let headers = self.create_headers(&request).await?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            Some(headers),
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, Some(headers)).await
     }
 
     pub async fn are_orders_scoring(&self, order_ids: &[&str]) -> Result<OrdersScoringResponse> {
@@ -1503,14 +1237,7 @@ impl<K: Kind> Client<Authenticated<K>> {
             .build()?;
         let headers = self.create_headers(&request).await?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            Some(headers),
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, Some(headers)).await
     }
 
     pub async fn earnings_for_user_for_day(
@@ -1532,14 +1259,7 @@ impl<K: Kind> Client<Authenticated<K>> {
             .build()?;
         let headers = self.create_headers(&request).await?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            Some(headers),
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, Some(headers)).await
     }
 
     pub async fn total_earnings_for_user_for_day(
@@ -1559,14 +1279,7 @@ impl<K: Kind> Client<Authenticated<K>> {
             .build()?;
         let headers = self.create_headers(&request).await?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            Some(headers),
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, Some(headers)).await
     }
 
     pub async fn user_earnings_and_markets_config(
@@ -1588,14 +1301,7 @@ impl<K: Kind> Client<Authenticated<K>> {
             .build()?;
         let headers = self.create_headers(&request).await?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            Some(headers),
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, Some(headers)).await
     }
 
     pub async fn reward_percentages(&self) -> Result<RewardsPercentagesResponse> {
@@ -1612,14 +1318,7 @@ impl<K: Kind> Client<Authenticated<K>> {
             .build()?;
         let headers = self.create_headers(&request).await?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            Some(headers),
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, Some(headers)).await
     }
 
     pub async fn current_rewards(
@@ -1636,14 +1335,7 @@ impl<K: Kind> Client<Authenticated<K>> {
             .build()?;
         let headers = self.create_headers(&request).await?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            Some(headers),
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, Some(headers)).await
     }
 
     pub async fn raw_rewards_for_market(
@@ -1661,14 +1353,7 @@ impl<K: Kind> Client<Authenticated<K>> {
             .build()?;
         let headers = self.create_headers(&request).await?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            Some(headers),
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, Some(headers)).await
     }
 
     pub async fn create_builder_api_key(&self) -> Result<Credentials> {
@@ -1678,14 +1363,7 @@ impl<K: Kind> Client<Authenticated<K>> {
             .build()?;
         let headers = self.create_headers(&request).await?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            Some(headers),
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, Some(headers)).await
     }
 
     async fn create_headers(&self, request: &Request) -> Result<HeaderMap> {
@@ -1767,14 +1445,7 @@ impl Client<Authenticated<Builder>> {
             .build()?;
         let headers = self.create_headers(&request).await?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            Some(headers),
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, Some(headers)).await
     }
 
     pub async fn revoke_builder_api_key(&self) -> Result<()> {
@@ -1812,14 +1483,7 @@ impl Client<Authenticated<Builder>> {
             .build()?;
         let headers = self.create_headers(&request).await?;
 
-        crate::request(
-            &self.inner.client,
-            request,
-            Some(headers),
-            #[cfg(feature = "rate-limiting")]
-            self.inner.rate_limiters.as_deref(),
-        )
-        .await
+        crate::request(&self.inner.client, request, Some(headers)).await
     }
 }
 
