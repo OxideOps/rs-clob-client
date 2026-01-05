@@ -108,14 +108,18 @@ impl Client {
         let client = ReqwestClient::builder().default_headers(headers).build()?;
 
         #[cfg(feature = "rate-limiting")]
-        let rate_limiters =
-            global_rate_limit.map(|quota| Arc::new(rate_limit::RateLimiters::with_global(quota)));
+        let rate_limiters = global_rate_limit.map_or(
+            rate_limit::RateLimiters::new(),
+            rate_limit::RateLimiters::with_global,
+        );
 
         Ok(Self {
             host: Url::parse(host)?,
             client,
             #[cfg(feature = "rate-limiting")]
-            rate_limiters,
+            rate_limiters: Some(Arc::new(rate_limiters)),
+            #[cfg(not(feature = "rate-limiting"))]
+            rate_limiters: None,
         })
     }
 

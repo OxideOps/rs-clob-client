@@ -135,6 +135,7 @@ mod implementation {
     #[derive(Debug, Default)]
     pub struct RateLimiters {
         limiters: DashMap<String, Limiter>,
+        // TODO: way to supply this directly instead of a quota, since we'll have to clone
         pub(crate) global: Option<Limiter>,
     }
 

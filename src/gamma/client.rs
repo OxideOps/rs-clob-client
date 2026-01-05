@@ -112,14 +112,18 @@ impl Client {
         let client = ReqwestClient::builder().default_headers(headers).build()?;
 
         #[cfg(feature = "rate-limiting")]
-        let rate_limiters =
-            global_rate_limit.map(|quota| Arc::new(rate_limit::RateLimiters::with_global(quota)));
+        let rate_limiters = global_rate_limit.map_or(
+            rate_limit::RateLimiters::new(),
+            rate_limit::RateLimiters::with_global,
+        );
 
         Ok(Self {
             host: Url::parse(host)?,
             client,
             #[cfg(feature = "rate-limiting")]
-            rate_limiters,
+            rate_limiters: Some(Arc::new(rate_limiters)),
+            #[cfg(not(feature = "rate-limiting"))]
+            rate_limiters: None,
         })
     }
 
@@ -134,11 +138,14 @@ impl Client {
         path: &str,
         req: &Req,
     ) -> Result<Res> {
+        crate::check!(self, api_only: "gamma", quota: "4000/10s");
+
         let query = req.query_params(None);
         let request = self
             .client
             .request(Method::GET, format!("{}{path}{query}", self.host))
             .build()?;
+
         crate::request(&self.client, request, None).await
     }
 
@@ -220,7 +227,7 @@ impl Client {
         &self,
         request: &RelatedTagsBySlugRequest,
     ) -> Result<Vec<RelatedTag>> {
-        crate::check!(self, key: "gamma_tags", quota: "200/10s");
+        crate::check!(self, key: "tags", quota: "200/10s");
 
         self.get(&format!("tags/slug/{}/related-tags", request.slug), request)
             .await
@@ -231,7 +238,7 @@ impl Client {
         &self,
         request: &RelatedTagsByIdRequest,
     ) -> Result<Vec<Tag>> {
-        crate::check!(self, key: "gamma_tags", quota: "200/10s");
+        crate::check!(self, key: "tags", quota: "200/10s");
 
         self.get(&format!("tags/{}/related-tags/tags", request.id), request)
             .await
@@ -242,7 +249,7 @@ impl Client {
         &self,
         request: &RelatedTagsBySlugRequest,
     ) -> Result<Vec<Tag>> {
-        crate::check!(self, key: "gamma_tags", quota: "200/10s");
+        crate::check!(self, key: "tags", quota: "200/10s");
 
         self.get(
             &format!("tags/slug/{}/related-tags/tags", request.slug),
@@ -253,21 +260,21 @@ impl Client {
 
     /// Lists events with optional filters.
     pub async fn events(&self, request: &EventsRequest) -> Result<Vec<Event>> {
-        crate::check!(self, key: "gamma_events", quota: "500/10s");
+        crate::check!(self, key: "events", quota: "500/10s");
 
         self.get("events", request).await
     }
 
     /// Gets an event by ID.
     pub async fn event_by_id(&self, request: &EventByIdRequest) -> Result<Event> {
-        crate::check!(self, key: "gamma_events", quota: "500/10s");
+        crate::check!(self, key: "events", quota: "500/10s");
 
         self.get(&format!("events/{}", request.id), request).await
     }
 
     /// Gets an event by slug.
     pub async fn event_by_slug(&self, request: &EventBySlugRequest) -> Result<Event> {
-        crate::check!(self, key: "gamma_events", quota: "500/10s");
+        crate::check!(self, key: "events", quota: "500/10s");
 
         self.get(&format!("events/slug/{}", request.slug), request)
             .await
@@ -275,13 +282,15 @@ impl Client {
 
     /// Gets tags for an event by ID.
     pub async fn event_tags(&self, request: &EventTagsRequest) -> Result<Vec<Tag>> {
+        crate::check!(self, key: "tags", quota: "200/10s");
+
         self.get(&format!("events/{}/tags", request.id), request)
             .await
     }
 
     /// Lists markets with optional filters.
     pub async fn markets(&self, request: &MarketsRequest) -> Result<Vec<Market>> {
-        crate::check!(self, key: "gamma_markets", quota: "300/10s");
+        crate::check!(self, key: "markets", quota: "300/10s");
 
         // Build base query string using the standard ToQueryParams trait
         let base_query = request.query_params(None);
@@ -306,17 +315,23 @@ impl Client {
 
     /// Gets a market by ID.
     pub async fn market_by_id(&self, request: &MarketByIdRequest) -> Result<Market> {
+        crate::check!(self, key: "markets", quota: "300/10s");
+
         self.get(&format!("markets/{}", request.id), request).await
     }
 
     /// Gets a market by slug.
     pub async fn market_by_slug(&self, request: &MarketBySlugRequest) -> Result<Market> {
+        crate::check!(self, key: "markets", quota: "300/10s");
+
         self.get(&format!("markets/slug/{}", request.slug), request)
             .await
     }
 
     /// Gets tags for a market by ID.
     pub async fn market_tags(&self, request: &MarketTagsRequest) -> Result<Vec<Tag>> {
+        crate::check!(self, key: "tags", quota: "200/10s");
+
         self.get(&format!("markets/{}/tags", request.id), request)
             .await
     }
@@ -333,13 +348,15 @@ impl Client {
 
     /// Lists comments with optional filters.
     pub async fn comments(&self, request: &CommentsRequest) -> Result<Vec<Comment>> {
-        crate::check!(self, key: "gamma_comments", quota: "200/10s");
+        crate::check!(self, key: "comments", quota: "200/10s");
 
         self.get("comments", request).await
     }
 
     /// Gets comments by comment ID.
     pub async fn comments_by_id(&self, request: &CommentsByIdRequest) -> Result<Vec<Comment>> {
+        crate::check!(self, key: "comments", quota: "200/10s");
+
         self.get(&format!("comments/{}", request.id), request).await
     }
 
@@ -348,6 +365,8 @@ impl Client {
         &self,
         request: &CommentsByUserAddressRequest,
     ) -> Result<Vec<Comment>> {
+        crate::check!(self, key: "comments", quota: "200/10s");
+
         self.get(
             &format!("comments/user_address/{}", request.user_address),
             request,
@@ -362,7 +381,7 @@ impl Client {
 
     /// Searches markets, events, and profiles.
     pub async fn search(&self, request: &SearchRequest) -> Result<SearchResults> {
-        crate::check!(self, key: "gamma_search", quota: "350/10s");
+        crate::check!(self, key: "search", quota: "350/10s");
 
         self.get("public-search", request).await
     }
