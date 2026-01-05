@@ -28,7 +28,7 @@ mod health {
     #[tokio::test]
     async fn health_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET).path("/");
@@ -58,7 +58,7 @@ mod positions {
     #[tokio::test]
     async fn positions_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET)
@@ -114,7 +114,7 @@ mod positions {
     #[tokio::test]
     async fn positions_with_filters_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET)
@@ -154,7 +154,7 @@ mod trades {
     #[tokio::test]
     async fn trades_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET).path("/trades");
@@ -214,7 +214,7 @@ mod activity {
     #[tokio::test]
     async fn activity_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET)
@@ -280,7 +280,7 @@ mod holders {
     #[tokio::test]
     async fn holders_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let holder2 = address!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
 
@@ -349,7 +349,7 @@ mod value {
     #[tokio::test]
     async fn value_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET)
@@ -388,7 +388,7 @@ mod closed_positions {
     #[tokio::test]
     async fn closed_positions_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET)
@@ -452,7 +452,7 @@ mod leaderboard {
     #[tokio::test]
     async fn leaderboard_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let second_user = address!("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
 
@@ -499,7 +499,7 @@ mod leaderboard {
     #[tokio::test]
     async fn leaderboard_with_filters_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET)
@@ -538,7 +538,7 @@ mod traded {
     #[tokio::test]
     async fn traded_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET)
@@ -574,7 +574,7 @@ mod open_interest {
     #[tokio::test]
     async fn open_interest_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let market2 =
             "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc".to_owned();
@@ -609,7 +609,7 @@ mod open_interest {
     #[tokio::test]
     async fn open_interest_with_market_filter_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET).path("/oi").query_param(
@@ -650,7 +650,7 @@ mod live_volume {
     #[tokio::test]
     async fn live_volume_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let market2 =
             "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd".to_owned();
@@ -705,7 +705,7 @@ mod builder_leaderboard {
     #[tokio::test]
     async fn builder_leaderboard_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET).path("/v1/builders/leaderboard");
@@ -746,7 +746,7 @@ mod builder_leaderboard {
     #[tokio::test]
     async fn builder_leaderboard_with_time_period_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET)
@@ -782,7 +782,7 @@ mod builder_volume {
     #[tokio::test]
     async fn builder_volume_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET).path("/v1/builders/volume");
@@ -825,7 +825,7 @@ mod builder_volume {
     #[tokio::test]
     async fn builder_volume_with_time_period_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET)
@@ -859,7 +859,7 @@ mod error_handling {
     #[tokio::test]
     async fn bad_request_should_return_error() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET).path("/positions");
@@ -883,7 +883,7 @@ mod error_handling {
     #[tokio::test]
     async fn server_error_should_return_error() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET).path("/positions");
@@ -908,7 +908,7 @@ mod error_handling {
     #[tokio::test]
     async fn null_response_should_return_error() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET).path("/positions");
@@ -939,14 +939,14 @@ mod client {
 
     #[test]
     fn client_new_with_custom_host_should_succeed() -> anyhow::Result<()> {
-        let client = Client::new("https://custom-api.example.com")?;
+        let client = Client::new("https://custom-api.example.com", None)?;
         assert_eq!(client.host().as_str(), "https://custom-api.example.com/");
         Ok(())
     }
 
     #[test]
     fn client_new_with_invalid_url_should_fail() {
-        Client::new("not-a-valid-url").unwrap_err();
+        Client::new("not-a-valid-url", None).unwrap_err();
     }
 }
 

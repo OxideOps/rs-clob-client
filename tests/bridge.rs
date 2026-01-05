@@ -14,7 +14,7 @@ mod deposit {
     #[tokio::test]
     async fn deposit_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(POST)
@@ -62,7 +62,7 @@ mod deposit {
     #[tokio::test]
     async fn deposit_without_note_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(POST).path("/deposit");
@@ -94,7 +94,7 @@ mod deposit {
     #[tokio::test]
     async fn deposit_bad_request_should_fail() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(POST).path("/deposit");
@@ -128,7 +128,7 @@ mod supported_assets {
     #[tokio::test]
     async fn supported_assets_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET).path("/supported-assets");
@@ -202,7 +202,7 @@ mod supported_assets {
     #[tokio::test]
     async fn supported_assets_empty_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET).path("/supported-assets");
@@ -221,7 +221,7 @@ mod supported_assets {
     #[tokio::test]
     async fn supported_assets_server_error_should_fail() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET).path("/supported-assets");
@@ -249,14 +249,14 @@ mod client {
 
     #[test]
     fn custom_host_should_succeed() -> anyhow::Result<()> {
-        let client = Client::new("https://custom.bridge.api")?;
+        let client = Client::new("https://custom.bridge.api", None)?;
         assert_eq!(client.host().as_str(), "https://custom.bridge.api/");
         Ok(())
     }
 
     #[test]
     fn invalid_host_should_fail() {
-        let result = Client::new("not a valid url");
+        let result = Client::new("not a valid url", None);
         result.unwrap_err();
     }
 }

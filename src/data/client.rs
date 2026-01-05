@@ -24,6 +24,8 @@
 //! # }
 //! ```
 
+use std::sync::Arc;
+
 use reqwest::{
     Client as ReqwestClient, Method,
     header::{HeaderMap, HeaderValue},
@@ -41,6 +43,7 @@ use super::types::response::{
     Activity, BuilderLeaderboardEntry, BuilderVolumeEntry, ClosedPosition, Health, LiveVolume,
     MetaHolder, OpenInterest, Position, Trade, Traded, TraderLeaderboardEntry, Value,
 };
+use crate::http::rate_limit;
 use crate::{Result, ToQueryParams as _};
 
 /// HTTP client for the Polymarket Data API.
@@ -61,17 +64,20 @@ use crate::{Result, ToQueryParams as _};
 /// let client = Client::default();
 ///
 /// // Or with a custom endpoint
-/// let client = Client::new("https://custom-api.example.com").unwrap();
+/// let client = Client::new("https://custom-api.example.com", None).unwrap();
 /// ```
+#[expect(clippy::struct_field_names, reason = "client included for clarity")]
 #[derive(Clone, Debug)]
 pub struct Client {
     host: Url,
     client: ReqwestClient,
+    #[cfg(feature = "rate-limiting")]
+    rate_limiters: Option<Arc<rate_limit::RateLimiters>>,
 }
 
 impl Default for Client {
     fn default() -> Self {
-        Client::new("https://data-api.polymarket.com")
+        Client::new("https://data-api.polymarket.com", None)
             .expect("Client with default endpoint should succeed")
     }
 }
@@ -82,11 +88,16 @@ impl Client {
     /// # Arguments
     ///
     /// * `host` - The base URL for the Data API (e.g., `https://data-api.polymarket.com`).
+    /// * `rate_limit_config` - Optional rate limiting configuration. Only available with the `rate-limiting` feature.
     ///
     /// # Errors
     ///
     /// Returns an error if the URL is invalid or the HTTP client cannot be created.
-    pub fn new(host: &str) -> Result<Client> {
+    pub fn new(
+        host: &str,
+        #[cfg(feature = "rate-limiting")] rate_limit_config: Option<&rate_limit::Config>,
+        #[cfg(not(feature = "rate-limiting"))] _rate_limit_config: Option<()>,
+    ) -> Result<Client> {
         let mut headers = HeaderMap::new();
 
         headers.insert("User-Agent", HeaderValue::from_static("rs_clob_client"));
@@ -95,9 +106,15 @@ impl Client {
         headers.insert("Content-Type", HeaderValue::from_static("application/json"));
         let client = ReqwestClient::builder().default_headers(headers).build()?;
 
+        #[cfg(feature = "rate-limiting")]
+        let rate_limiters =
+            rate_limit_config.map(|cfg| Arc::new(rate_limit::RateLimiters::new(cfg)));
+
         Ok(Self {
             host: Url::parse(host)?,
             client,
+            #[cfg(feature = "rate-limiting")]
+            rate_limiters,
         })
     }
 
@@ -117,7 +134,14 @@ impl Client {
             .client
             .request(Method::GET, format!("{}{path}{query}", self.host))
             .build()?;
-        crate::request(&self.client, request, None).await
+        crate::request(
+            &self.client,
+            request,
+            None,
+            #[cfg(feature = "rate-limiting")]
+            self.rate_limiters.as_deref(),
+        )
+        .await
     }
 
     /// Performs a health check on the API.

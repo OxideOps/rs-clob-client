@@ -460,13 +460,10 @@ fn to_ieee_754_int(salt: u64) -> u64 {
 #[must_use]
 #[expect(
     clippy::float_arithmetic,
-    reason = "We are not concerned with precision for the seed"
-)]
-#[expect(
     clippy::cast_possible_truncation,
-    reason = "We are not concerned with truncation for a seed"
+    clippy::cast_sign_loss,
+    reason = "We are not concerned with precision or truncation for the seed which is always positive"
 )]
-#[expect(clippy::cast_sign_loss, reason = "We only need positive integers")]
 pub(crate) fn generate_seed() -> u64 {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)

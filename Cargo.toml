@@ -27,6 +27,7 @@ bridge = []
 tracing = ["dep:tracing", "dep:serde_ignored"]
 ws = ["dep:backoff", "dep:bitflags", "dep:tokio", "dep:tokio-tungstenite"]
 rtds = ["dep:backoff", "dep:tokio", "dep:tokio-tungstenite"]
+rate-limiting = ["dep:governor"]
 
 [dependencies]
 alloy = { version = "1.2.1", default-features = false, features = [
@@ -45,6 +46,7 @@ bon = "3.8.1"
 chrono = { version = "0.4.42", features = ["serde"] }
 dashmap = "6.1.0"
 futures = "0.3.31"
+governor = { version = "0.6", optional = true }
 hmac = "0.12.1"
 once_cell = "1.21.3"
 phf = { version = "0.13.1", features = ["macros"] }

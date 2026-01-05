@@ -38,7 +38,7 @@ mod sports {
     #[tokio::test]
     async fn teams_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET).path("/teams");
@@ -84,7 +84,7 @@ mod sports {
     #[tokio::test]
     async fn sports_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET).path("/sports");
@@ -113,7 +113,7 @@ mod sports {
     #[tokio::test]
     async fn sports_market_types_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET).path("/sports/market-types");
@@ -149,7 +149,7 @@ mod tags {
     #[tokio::test]
     async fn tags_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET).path("/tags");
@@ -185,7 +185,7 @@ mod tags {
     #[tokio::test]
     async fn tag_by_id_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET).path("/tags/42");
@@ -213,7 +213,7 @@ mod tags {
     #[tokio::test]
     async fn tag_by_slug_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET).path("/tags/slug/crypto");
@@ -240,7 +240,7 @@ mod tags {
     #[tokio::test]
     async fn related_tags_by_id_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET).path("/tags/42/related-tags");
@@ -269,7 +269,7 @@ mod tags {
     #[tokio::test]
     async fn related_tags_by_slug_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET).path("/tags/slug/politics/related-tags");
@@ -296,7 +296,7 @@ mod tags {
     #[tokio::test]
     async fn tags_related_to_tag_by_id_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET).path("/tags/42/related-tags/tags");
@@ -326,7 +326,7 @@ mod tags {
     #[tokio::test]
     async fn tags_related_to_tag_by_slug_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET)
@@ -367,7 +367,7 @@ mod events {
     #[tokio::test]
     async fn events_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET)
@@ -397,7 +397,7 @@ mod events {
     #[tokio::test]
     async fn event_by_id_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET).path("/events/456");
@@ -421,7 +421,7 @@ mod events {
     #[tokio::test]
     async fn event_by_slug_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET).path("/events/slug/my-event");
@@ -455,7 +455,7 @@ mod markets {
     #[tokio::test]
     async fn markets_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET).path("/markets").query_param("limit", "10");
@@ -482,7 +482,7 @@ mod markets {
     #[tokio::test]
     async fn market_by_id_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET).path("/markets/42");
@@ -506,7 +506,7 @@ mod markets {
     #[tokio::test]
     async fn market_by_slug_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET).path("/markets/slug/my-market");
@@ -531,7 +531,7 @@ mod markets {
     async fn markets_empty_request() -> anyhow::Result<()> {
         // Tests (true, true): no base params, no clob_token_ids
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET).path("/markets");
@@ -551,7 +551,7 @@ mod markets {
     async fn markets_only_clob_token_ids() -> anyhow::Result<()> {
         // Tests (true, false): only clob_token_ids, no base params
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET)
@@ -578,7 +578,7 @@ mod markets {
     async fn markets_with_base_and_clob_params() -> anyhow::Result<()> {
         // Tests (false, false): both base params and clob_token_ids
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET)
@@ -614,7 +614,7 @@ mod search {
     #[tokio::test]
     async fn search_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET)
@@ -651,7 +651,7 @@ mod health {
     #[tokio::test]
     async fn status_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET).path("/status");
@@ -679,7 +679,7 @@ mod series {
     #[tokio::test]
     async fn series_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET).path("/series");
@@ -709,7 +709,7 @@ mod series {
     #[tokio::test]
     async fn series_by_id_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET).path("/series/42");
@@ -747,7 +747,7 @@ mod comments {
     #[tokio::test]
     async fn comments_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET).path("/comments");
@@ -780,7 +780,7 @@ mod comments {
     #[tokio::test]
     async fn comments_with_filters_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET)
@@ -807,7 +807,7 @@ mod comments {
     #[tokio::test]
     async fn comments_by_id_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET).path("/comments/42");
@@ -835,7 +835,7 @@ mod comments {
     #[tokio::test]
     async fn comments_by_user_address_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET)
@@ -877,7 +877,7 @@ mod profiles {
     #[tokio::test]
     async fn public_profile_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET)
@@ -916,7 +916,7 @@ mod event_tags {
     #[tokio::test]
     async fn event_tags_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET).path("/events/123/tags");
@@ -957,7 +957,7 @@ mod market_tags {
     #[tokio::test]
     async fn market_tags_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
-        let client = Client::new(&server.base_url())?;
+        let client = Client::new(&server.base_url(), None)?;
 
         let mock = server.mock(|when, then| {
             when.method(GET).path("/markets/456/tags");
