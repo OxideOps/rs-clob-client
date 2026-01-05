@@ -96,7 +96,7 @@ impl Client {
     /// Returns an error if the URL is invalid or the HTTP client cannot be created.
     pub fn new(
         host: &str,
-        #[cfg(feature = "rate-limiting")] global_rate_limit: Option<governor::Quota>,
+        #[cfg(feature = "rate-limiting")] global_rate_limit: Option<rate_limit::Limiter>,
         #[cfg(not(feature = "rate-limiting"))] _rate_limit_config: Option<()>,
     ) -> Result<Client> {
         let mut headers = HeaderMap::new();

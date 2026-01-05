@@ -48,11 +48,6 @@ impl Default for Client {
 impl Client {
     /// Creates a new Bridge API client with a custom host.
     ///
-    /// # Arguments
-    ///
-    /// * `host` - The base URL for the Bridge API (e.g., `https://bridge.polymarket.com`).
-    /// * `rate_limit_config` - Optional rate limiting configuration. Only available with the `rate-limiting` feature.
-    ///
     /// # Errors
     ///
     /// Returns an error if the host URL is invalid or the HTTP client fails to build.

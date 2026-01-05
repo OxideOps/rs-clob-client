@@ -100,7 +100,7 @@ impl Client {
     /// Returns an error if the URL is invalid or the HTTP client cannot be created.
     pub fn new(
         host: &str,
-        #[cfg(feature = "rate-limiting")] global_rate_limit: Option<governor::Quota>,
+        #[cfg(feature = "rate-limiting")] global_rate_limit: Option<rate_limit::Limiter>,
         #[cfg(not(feature = "rate-limiting"))] _rate_limit_config: Option<()>,
     ) -> Result<Client> {
         let mut headers = HeaderMap::new();
@@ -189,21 +189,21 @@ impl Client {
 
     /// Lists tags with optional filters.
     pub async fn tags(&self, request: &TagsRequest) -> Result<Vec<Tag>> {
-        crate::check!(self, key: "gamma_tags", quota: "200/10s");
+        crate::check!(self, key: "tags", quota: "200/10s");
 
         self.get("tags", request).await
     }
 
     /// Gets a tag by ID.
     pub async fn tag_by_id(&self, request: &TagByIdRequest) -> Result<Tag> {
-        crate::check!(self, key: "gamma_tags", quota: "200/10s");
+        crate::check!(self, key: "tags", quota: "200/10s");
 
         self.get(&format!("tags/{}", request.id), request).await
     }
 
     /// Gets a tag by slug.
     pub async fn tag_by_slug(&self, request: &TagBySlugRequest) -> Result<Tag> {
-        crate::check!(self, key: "gamma_tags", quota: "200/10s");
+        crate::check!(self, key: "tags", quota: "200/10s");
 
         self.get(&format!("tags/slug/{}", request.slug), request)
             .await
@@ -214,7 +214,7 @@ impl Client {
         &self,
         request: &RelatedTagsByIdRequest,
     ) -> Result<Vec<RelatedTag>> {
-        crate::check!(self, key: "gamma_tags", quota: "200/10s");
+        crate::check!(self, key: "tags", quota: "200/10s");
 
         self.get(&format!("tags/{}/related-tags", request.id), request)
             .await

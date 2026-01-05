@@ -136,7 +136,6 @@ mod implementation {
     #[derive(Debug, Default)]
     pub struct RateLimiters {
         limiters: DashMap<String, Limiter>,
-        // TODO: way to supply this directly instead of a quota, since we'll have to clone
         pub(crate) global: Option<Limiter>,
     }
 
@@ -149,10 +148,10 @@ mod implementation {
 
         /// Creates rate limiters with a global quota.
         #[must_use]
-        pub fn with_global(global_quota: GovernorQuota) -> Self {
+        pub fn with_global(global: Limiter) -> Self {
             Self {
                 limiters: DashMap::new(),
-                global: Some(Arc::new(RateLimiter::direct(global_quota))),
+                global: Some(global),
             }
         }
 
@@ -194,149 +193,56 @@ mod implementation {
         /// # Errors
         ///
         /// Currently, always returns Ok after waiting. Future versions may support fail-fast.
-        // TODO: check burst works
         pub async fn check_spec(&self, spec: &Spec) -> crate::Result<()> {
-            match &spec.quota {
-                Quota::Single(quota) => {
-                    let endpoint_limiter = self.get_or_create_limiter(spec.key, *quota);
-                    let endpoint_fut = endpoint_limiter.until_ready();
+            let endpoint_fut = async move {
+                match &spec.quota {
+                    Quota::Single(quota) => {
+                        self.get_or_create_limiter(spec.key, *quota)
+                            .until_ready()
+                            .await;
+                    }
+                    Quota::MultiWindow { burst, sustained } => {
+                        // For multi-window, check both burst and sustained
+                        let burst_key = format!("{}_burst", spec.key);
+                        let sustained_key = format!("{}_sustained", spec.key);
 
-                    // Check all limiters concurrently based on what's configured
-                    match (spec.api_quota, &self.global) {
-                        (Some(api_quota), Some(global)) => {
-                            let api = spec.key.split('_').next().unwrap_or("unknown");
-                            let api_key = format!("{api}_api");
-                            let api_limiter = self.get_or_create_limiter(&api_key, api_quota);
-                            join!(
-                                endpoint_fut,
-                                api_limiter.until_ready(),
-                                global.until_ready()
-                            );
-                        }
-                        (Some(api_quota), None) => {
-                            let api = spec.key.split('_').next().unwrap_or("unknown");
-                            let api_key = format!("{api}_api");
-                            let api_limiter = self.get_or_create_limiter(&api_key, api_quota);
-                            join!(endpoint_fut, api_limiter.until_ready());
-                        }
-                        (None, Some(global)) => {
-                            join!(endpoint_fut, global.until_ready());
-                        }
-                        (None, None) => {
-                            endpoint_fut.await;
+                        let burst_limiter = self.get_or_create_limiter(&burst_key, *burst);
+                        let sustained_limiter =
+                            self.get_or_create_limiter(&sustained_key, *sustained);
+
+                        // If the burst limiter passes the check, regardless of the sustained limiter,
+                        // we'll allow the request through. If we exceed the burst allowance, we
+                        // must wait for that limiter to be ready. If both limiters are not ready,
+                        // wait for both.
+                        match (burst_limiter.check(), sustained_limiter.check()) {
+                            (Ok(()), _) => {}
+                            (Err(_), Ok(())) => burst_limiter.until_ready().await,
+                            (Err(_), Err(_)) => {
+                                join!(sustained_limiter.until_ready(), burst_limiter.until_ready());
+                            }
                         }
                     }
                 }
-                Quota::MultiWindow { burst, sustained } => {
-                    // For multi-window, check both burst and sustained plus optional API/global
-                    let burst_key = format!("{}_burst", spec.key);
-                    let sustained_key = format!("{}_sustained", spec.key);
+            };
 
-                    let burst_limiter = self.get_or_create_limiter(&burst_key, *burst);
-                    let sustained_limiter = self.get_or_create_limiter(&sustained_key, *sustained);
-
-                    let burst_fut = burst_limiter.until_ready();
-                    let sustained_fut = sustained_limiter.until_ready();
-
-                    // Check all limiters concurrently
-                    match (spec.api_quota, &self.global) {
-                        (Some(api_quota), Some(global)) => {
-                            let api = spec.key.split('_').next().unwrap_or("unknown");
-                            let api_key = format!("{api}_api");
-                            let api_limiter = self.get_or_create_limiter(&api_key, api_quota);
-                            join!(
-                                burst_fut,
-                                sustained_fut,
-                                api_limiter.until_ready(),
-                                global.until_ready()
-                            );
-                        }
-                        (Some(api_quota), None) => {
-                            let api = spec.key.split('_').next().unwrap_or("unknown");
-                            let api_key = format!("{api}_api");
-                            let api_limiter = self.get_or_create_limiter(&api_key, api_quota);
-                            join!(burst_fut, sustained_fut, api_limiter.until_ready());
-                        }
-                        (None, Some(global)) => {
-                            join!(burst_fut, sustained_fut, global.until_ready());
-                        }
-                        (None, None) => {
-                            join!(burst_fut, sustained_fut);
-                        }
-                    }
+            let api_fut = async move {
+                if let Some(quota) = spec.api_quota {
+                    let api = spec.key.split('_').next().unwrap_or("unknown");
+                    let api_key = format!("{api}_api");
+                    let limiter = self.get_or_create_limiter(&api_key, quota);
+                    limiter.until_ready().await;
                 }
-            }
+            };
+
+            let global_fut = async move {
+                if let Some(global) = &self.global {
+                    global.until_ready().await;
+                }
+            };
+
+            join!(endpoint_fut, api_fut, global_fut);
 
             Ok(())
-        }
-    }
-
-    #[cfg(test)]
-    mod tests {
-        use super::*;
-
-        #[test]
-        fn parse_quota_str_works() {
-            let q = parse_quota_str(100, "10s");
-            assert_eq!(q.burst_size().get(), 100);
-
-            let q = parse_quota_str(60, "1m");
-            assert_eq!(q.burst_size().get(), 60);
-
-            let q = parse_quota_str(1000, "10m");
-            assert_eq!(q.burst_size().get(), 1000);
-        }
-
-        #[test]
-        fn quota_helpers_work() {
-            let q = quota_10s(100);
-            assert_eq!(q.burst_size().get(), 100);
-
-            let q = quota_1min(60);
-            assert_eq!(q.burst_size().get(), 60);
-
-            let q = quota_10min(1000);
-            assert_eq!(q.burst_size().get(), 1000);
-        }
-
-        #[tokio::test]
-        async fn rate_limiters_can_be_created() {
-            let limiters = RateLimiters::new();
-            assert!(limiters.global.is_none());
-
-            let limiters = RateLimiters::with_global(quota_10s(10000));
-            assert!(limiters.global.is_some());
-        }
-
-        #[tokio::test]
-        async fn rate_limiting_check_spec_works() {
-            let limiters = RateLimiters::new();
-            let spec = Spec {
-                key: "test",
-                quota: Quota::Single(quota_10s(1000)),
-                api_quota: None,
-            };
-
-            // Should not error
-            let result = limiters.check_spec(&spec).await;
-            result.unwrap();
-        }
-
-        #[tokio::test]
-        async fn multi_window_quota_works() {
-            let limiters = RateLimiters::new();
-            let spec = Spec {
-                key: "test_multi",
-                quota: Quota::MultiWindow {
-                    burst: quota_10s(100),
-                    sustained: quota_10min(1000),
-                },
-                api_quota: None,
-            };
-
-            // Should not error
-            let result = limiters.check_spec(&spec).await;
-            result.unwrap();
         }
     }
 }
@@ -458,6 +364,10 @@ pub use check;
 
 #[cfg(all(test, feature = "rate-limiting"))]
 mod tests {
+    use std::sync::Arc;
+
+    use governor::RateLimiter;
+
     use super::*;
 
     #[test]
@@ -489,7 +399,8 @@ mod tests {
         let limiters = RateLimiters::new();
         assert!(limiters.global.is_none());
 
-        let limiters = RateLimiters::with_global(quota_10s(10000));
+        let global = Arc::new(RateLimiter::direct(quota_10s(10000)));
+        let limiters = RateLimiters::with_global(global);
         assert!(limiters.global.is_some());
     }
 
