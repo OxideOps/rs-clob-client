@@ -308,13 +308,23 @@ struct ClientInner<S: State> {
 }
 
 impl<S: State> ClientInner<S> {
+    async fn request<Response: DeserializeOwned>(
+        &self,
+        request: Request,
+        headers: Option<HeaderMap>,
+    ) -> Result<Response> {
+        crate::check!(self, api_only: "clob", quota: "9000/10s");
+
+        crate::request(&self.client, request, headers).await
+    }
+
     pub async fn server_time(&self) -> Result<Timestamp> {
         let request = self
             .client
             .request(Method::GET, format!("{}time", self.host))
             .build()?;
 
-        crate::request(&self.client, request, None).await
+        self.request(request, None).await
     }
 }
 
@@ -332,7 +342,7 @@ impl ClientInner<Unauthenticated> {
             .build()?;
         let headers = self.create_headers(signer, nonce).await?;
 
-        crate::request(&self.client, request, Some(headers)).await
+        self.request(request, Some(headers)).await
     }
 
     pub async fn derive_api_key<S: Signer>(
@@ -348,7 +358,7 @@ impl ClientInner<Unauthenticated> {
             .build()?;
         let headers = self.create_headers(signer, nonce).await?;
 
-        crate::request(&self.client, request, Some(headers)).await
+        self.request(request, Some(headers)).await
     }
 
     async fn create_or_derive_api_key<S: Signer>(
@@ -394,9 +404,7 @@ impl<S: State> Client<S> {
         request: Request,
         headers: Option<HeaderMap>,
     ) -> Result<Response> {
-        crate::check!(self.inner, api_only: "clob", quota: "9000/10s");
-
-        crate::request(&self.inner.client, request, headers).await
+        self.inner.request(request, headers).await
     }
 
     pub async fn ok(&self) -> Result<String> {
@@ -498,7 +506,7 @@ impl<S: State> Client<S> {
             req = req.query(&[("fidelity", fidelity)]);
         }
 
-        crate::request(&self.inner.client, req.build()?, None).await
+        self.request(req.build()?, None).await
     }
 
     pub async fn spread(&self, request: &SpreadRequest) -> Result<SpreadResponse> {
@@ -541,8 +549,7 @@ impl<S: State> Client<S> {
             .query(&[("token_id", token_id)])
             .build()?;
 
-        let response =
-            crate::request::<TickSizeResponse>(&self.inner.client, request, None).await?;
+        let response = self.request::<TickSizeResponse>(request, None).await?;
 
         self.inner
             .tick_sizes
@@ -572,7 +579,7 @@ impl<S: State> Client<S> {
             .query(&[("token_id", token_id)])
             .build()?;
 
-        let response = crate::request::<NegRiskResponse>(&self.inner.client, request, None).await?;
+        let response = self.request::<NegRiskResponse>(request, None).await?;
 
         self.inner
             .neg_risk
@@ -602,7 +609,7 @@ impl<S: State> Client<S> {
             .query(&[("token_id", token_id)])
             .build()?;
 
-        let response = crate::request::<FeeRateResponse>(&self.inner.client, request, None).await?;
+        let response = self.request::<FeeRateResponse>(request, None).await?;
 
         self.inner
             .fee_rate_bps
