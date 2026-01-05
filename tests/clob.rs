@@ -3323,6 +3323,69 @@ mod external_signing {
     }
 
     #[tokio::test]
+    async fn post_externally_signed_order_should_convert_sell_side() -> anyhow::Result<()> {
+        let server = MockServer::start();
+        let client = create_authenticated(&server).await?;
+
+        ensure_requirements(&server, TOKEN_1, TickSize::Hundredth);
+
+        // Build order for SELL side (1)
+        let signable_order = client
+            .limit_order()
+            .token_id(TOKEN_1)
+            .price(dec!(0.50))
+            .size(Decimal::ONE_HUNDRED)
+            .side(Side::Sell)
+            .build()
+            .await?;
+
+        let signing_data = client
+            .prepare_for_external_signing(&signable_order, POLYGON)
+            .await?;
+
+        // Verify the order_data.order has numeric side (1 for SELL)
+        let order_data: serde_json::Value = serde_json::from_str(&signing_data.order_data)?;
+        assert_eq!(
+            order_data["order"]["side"], 1,
+            "order_data should have numeric side 1 for SELL"
+        );
+
+        // Mock verifies the request body contains string "SELL" (not numeric 1)
+        let mock = server.mock(|when, then| {
+            when.method(POST)
+                .path("/orders")
+                .header(POLY_ADDRESS, client.address().to_string().to_lowercase())
+                .header(POLY_API_KEY, API_KEY)
+                .header(POLY_PASSPHRASE, PASSPHRASE)
+                .is_true(|req| {
+                    let body = req.body_string();
+                    // Must contain string "SELL", not numeric 1
+                    body.contains(r#""side":"SELL""#)
+                });
+            then.status(StatusCode::OK).json_body(json!([{
+                "error_msg": "",
+                "makingAmount": "",
+                "orderID": "0xsell123",
+                "status": "live",
+                "success": true,
+                "takingAmount": ""
+            }]));
+        });
+
+        let fake_signature = "0x1234";
+
+        let response = client
+            .post_externally_signed_order(order_data, fake_signature)
+            .await?;
+
+        assert!(response.success);
+        assert_eq!(response.order_id, "0xsell123");
+        mock.assert();
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn post_externally_signed_order_should_inject_owner() -> anyhow::Result<()> {
         let server = MockServer::start();
         let client = create_authenticated(&server).await?;
