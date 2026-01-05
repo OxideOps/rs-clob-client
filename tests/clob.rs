@@ -3042,25 +3042,45 @@ mod external_signing {
         // Verify typed_data is valid JSON with EIP-712 structure
         let typed_data: serde_json::Value = serde_json::from_str(&signing_data.typed_data)?;
 
-        assert!(
-            typed_data.get("types").is_some(),
-            "typed_data should have 'types'"
-        );
-        assert!(
-            typed_data.get("domain").is_some(),
-            "typed_data should have 'domain'"
-        );
-        assert!(
-            typed_data.get("primaryType").is_some(),
-            "typed_data should have 'primaryType'"
-        );
-        assert!(
-            typed_data.get("message").is_some(),
-            "typed_data should have 'message'"
-        );
-
         // Verify primaryType is "Order"
         assert_eq!(typed_data["primaryType"], "Order");
+
+        // Verify types contains EIP712Domain with required fields
+        let types = &typed_data["types"];
+        assert!(
+            types.get("EIP712Domain").is_some(),
+            "should have EIP712Domain type"
+        );
+        let eip712_domain_fields: Vec<&str> = types["EIP712Domain"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|f| f["name"].as_str().unwrap())
+            .collect();
+        assert!(eip712_domain_fields.contains(&"name"));
+        assert!(eip712_domain_fields.contains(&"version"));
+        assert!(eip712_domain_fields.contains(&"chainId"));
+        assert!(eip712_domain_fields.contains(&"verifyingContract"));
+
+        // Verify types contains Order with required fields
+        assert!(types.get("Order").is_some(), "should have Order type");
+        let order_fields: Vec<&str> = types["Order"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|f| f["name"].as_str().unwrap())
+            .collect();
+        assert!(order_fields.contains(&"salt"));
+        assert!(order_fields.contains(&"maker"));
+        assert!(order_fields.contains(&"signer"));
+        assert!(order_fields.contains(&"tokenId"));
+        assert!(order_fields.contains(&"makerAmount"));
+        assert!(order_fields.contains(&"takerAmount"));
+        assert!(order_fields.contains(&"side"));
+
+        // Verify domain and message exist
+        assert!(typed_data.get("domain").is_some(), "should have domain");
+        assert!(typed_data.get("message").is_some(), "should have message");
 
         Ok(())
     }
@@ -3092,9 +3112,10 @@ mod external_signing {
         assert_eq!(domain["version"], "1");
         // chainId is serialized as hex string
         assert_eq!(domain["chainId"], format!("0x{POLYGON:x}"));
-        assert!(
-            domain["verifyingContract"].is_string(),
-            "should have verifyingContract"
+        // Verify the actual exchange contract address for POLYGON (non-neg-risk)
+        assert_eq!(
+            domain["verifyingContract"].as_str().unwrap().to_lowercase(),
+            "0x4bfb41d5b3570defd03c39a9a4d8de6bd8b8982e"
         );
 
         Ok(())
@@ -3124,18 +3145,29 @@ mod external_signing {
         let typed_data: serde_json::Value = serde_json::from_str(&signing_data.typed_data)?;
         let order = &typed_data["message"];
 
+        // Verify field existence and key values
         assert!(order.get("salt").is_some());
         assert!(order.get("maker").is_some());
         assert!(order.get("signer").is_some());
-        assert!(order.get("tokenId").is_some());
+
+        // Verify tokenId matches input
+        assert_eq!(order["tokenId"], TOKEN_1);
+
+        // Verify side is 0 (BUY)
+        assert_eq!(order["side"], 0);
+
+        // Verify amounts are present and non-zero (price=0.50, size=100)
         assert!(order.get("makerAmount").is_some());
         assert!(order.get("takerAmount").is_some());
-        assert!(order.get("side").is_some());
+
+        // Verify signatureType is present
         assert!(order.get("signatureType").is_some());
 
-        // Verify order_data contains orderType
+        // Verify order_data contains orderType and order matches typed_data.message
         let order_data: serde_json::Value = serde_json::from_str(&signing_data.order_data)?;
         assert_eq!(order_data["orderType"], "GTC");
+        assert_eq!(order_data["order"]["tokenId"], TOKEN_1);
+        assert_eq!(order_data["order"]["side"], 0);
 
         Ok(())
     }
@@ -3496,7 +3528,7 @@ mod external_signing {
     }
 
     #[tokio::test]
-    async fn external_signing_roundtrip() -> anyhow::Result<()> {
+    async fn external_signing_roundtrip_should_succeed() -> anyhow::Result<()> {
         let server = MockServer::start();
         let signer = LocalSigner::from_str(PRIVATE_KEY)?.with_chain_id(Some(POLYGON));
 
