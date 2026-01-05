@@ -25,7 +25,7 @@ pub type ApiKey = Uuid;
 
 /// Generic set of credentials used to authenticate to the Polymarket API. These credentials are
 /// returned when calling [`crate::clob::Client::create_or_derive_api_key`], [`crate::clob::Client::derive_api_key`], or
-/// [`crate::clob::Client::create_api_key`]. They are used by the [`crate::clob::state::Authenticated`] client to
+/// [`crate::clob::Client::create_api_key`]. They are used by the [`state::Authenticated`] client to
 /// sign the [`Request`] when making calls to the API.
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct Credentials {
@@ -64,22 +64,20 @@ impl Credentials {
     }
 }
 
-/// Each [`Client`] can exist in one state at a time, i.e. [`state::Unauthenticated`] or
+/// Each configured client can exist in one state at a time, i.e. [`state::Unauthenticated`] or
 /// [`state::Authenticated`].
 pub mod state {
     use crate::auth::{Credentials, Kind};
     use crate::types::Address;
 
-    /// The initial state of the [`super::Client`]
+    /// The initial state
     #[non_exhaustive]
     #[derive(Clone, Debug)]
     pub struct Unauthenticated;
 
-    /// The elevated state of the [`super::Client`]. Calling [`super::Client::authentication_builder`]
-    /// will return an [`super::AuthenticationBuilder`], which can be turned into
-    /// an authenticated clob via [`super::AuthenticationBuilder::authenticate`].
+    /// The elevated state of the client.
     ///
-    /// See `examples/authenticated.rs` for more context.
+    /// See `examples/clob/authenticated.rs` for more context.
     #[non_exhaustive]
     #[derive(Clone, Debug)]
     pub struct Authenticated<K: Kind> {

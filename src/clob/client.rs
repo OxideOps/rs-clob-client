@@ -191,7 +191,7 @@ impl<S: Signer, K: Kind> AuthenticationBuilder<'_, S, K> {
 /// The main way for API users to interact with the Polymarket CLOB.
 ///
 /// A [`Client`] can either be [`Unauthenticated`] or [`Authenticated`], that is, authenticated
-/// with a particular [`Signer`], `S`, and a particular [`AuthKind`], `K`. That [`AuthKind`] lets
+/// with a particular [`Signer`], `S`, and a particular [`Kind`], `K`. That [`Kind`] lets
 /// the client know if it's authenticating [`Normal`]ly or as a [`auth::builder::Builder`].
 ///
 /// Only the allowed methods will be available for use when in a particular state, i.e. only
@@ -266,12 +266,6 @@ pub struct Config {
     /// This is primarily useful for testing.
     #[builder(into)]
     geoblock_host: Option<String>,
-    /// Optional global rate limit quota. When enabled (with the `rate-limiting` feature flag),
-    /// this applies a global rate limit across all CLOB requests. Use `quota_10s(15000)` for
-    /// Polymarket's 15k/10s global limit. Endpoint-specific limits are declared via `#[rate_limit]`.
-    /// Defaults to `None` (no global limit).
-    #[cfg(feature = "rate-limiting")]
-    pub global_rate_limit: Option<rate_limit::Limiter>,
 }
 
 /// The default geoblock API host (separate from CLOB host)
@@ -857,14 +851,6 @@ impl Client<Unauthenticated> {
                 .unwrap_or(DEFAULT_GEOBLOCK_HOST),
         )?;
 
-        #[cfg(feature = "rate-limiting")]
-        let rate_limiters = config
-            .global_rate_limit
-            .as_ref()
-            .map_or_else(rate_limit::RateLimiters::new, |r| {
-                rate_limit::RateLimiters::with_global(Arc::clone(r))
-            });
-
         Ok(Self {
             inner: Arc::new(ClientInner {
                 config,
@@ -879,7 +865,7 @@ impl Client<Unauthenticated> {
                 signature_type: SignatureType::Eoa,
                 salt_generator: generate_seed,
                 #[cfg(feature = "rate-limiting")]
-                rate_limiters: Arc::new(rate_limiters),
+                rate_limiters: Arc::new(rate_limit::RateLimiters::new()),
             }),
         })
     }

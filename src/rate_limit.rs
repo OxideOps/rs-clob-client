@@ -118,7 +118,6 @@ mod implementation {
     #[derive(Debug, Default)]
     pub struct RateLimiters {
         limiters: DashMap<String, Limiter>,
-        pub(crate) global: Option<Limiter>,
     }
 
     impl RateLimiters {
@@ -126,15 +125,6 @@ mod implementation {
         #[must_use]
         pub fn new() -> Self {
             Self::default()
-        }
-
-        /// Creates rate limiters with a global quota.
-        #[must_use]
-        pub fn with_global(global: Limiter) -> Self {
-            Self {
-                limiters: DashMap::new(),
-                global: Some(global),
-            }
         }
 
         /// Gets or creates a rate limiter for the given key and quota.
@@ -157,10 +147,6 @@ mod implementation {
             let api_key = format!("{api}_api");
             let limiter = self.get_or_create_limiter(&api_key, quota);
             limiter.until_ready().await;
-
-            if let Some(global_limiter) = &self.global {
-                global_limiter.until_ready().await;
-            }
 
             Ok(())
         }
@@ -216,13 +202,7 @@ mod implementation {
                 }
             };
 
-            let global_fut = async move {
-                if let Some(global) = &self.global {
-                    global.until_ready().await;
-                }
-            };
-
-            join!(endpoint_fut, api_fut, global_fut);
+            join!(endpoint_fut, api_fut);
 
             Ok(())
         }
@@ -350,8 +330,6 @@ pub use check;
 mod tests {
     use std::sync::Arc;
 
-    use governor::RateLimiter;
-
     use super::*;
 
     #[test]
@@ -364,16 +342,6 @@ mod tests {
 
         let q = parse_quota(1000, "10m");
         assert_eq!(q.burst_size().get(), 1000);
-    }
-
-    #[tokio::test]
-    async fn rate_limiters_can_be_created() {
-        let limiters = RateLimiters::new();
-        assert!(limiters.global.is_none());
-
-        let global = Arc::new(RateLimiter::direct(parse_quota(10000, "10s")));
-        let limiters = RateLimiters::with_global(global);
-        assert!(limiters.global.is_some());
     }
 
     #[tokio::test]

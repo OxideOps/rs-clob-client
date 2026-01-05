@@ -65,7 +65,7 @@ use crate::{Result, ToQueryParams as _};
 /// let client = Client::default();
 ///
 /// // Or with a custom endpoint
-/// let client = Client::new("https://custom-api.example.com", None).unwrap();
+/// let client = Client::new("https://custom-api.example.com").unwrap();
 /// ```
 #[expect(clippy::struct_field_names, reason = "client included for clarity")]
 #[derive(Clone, Debug)]
@@ -78,7 +78,7 @@ pub struct Client {
 
 impl Default for Client {
     fn default() -> Self {
-        Client::new("https://data-api.polymarket.com", None)
+        Client::new("https://data-api.polymarket.com")
             .expect("Client with default endpoint should succeed")
     }
 }
@@ -94,11 +94,7 @@ impl Client {
     /// # Errors
     ///
     /// Returns an error if the URL is invalid or the HTTP client cannot be created.
-    pub fn new(
-        host: &str,
-        #[cfg(feature = "rate-limiting")] global_rate_limit: Option<rate_limit::Limiter>,
-        #[cfg(not(feature = "rate-limiting"))] _rate_limit_config: Option<()>,
-    ) -> Result<Client> {
+    pub fn new(host: &str) -> Result<Client> {
         let mut headers = HeaderMap::new();
 
         headers.insert("User-Agent", HeaderValue::from_static("rs_clob_client"));
@@ -107,17 +103,11 @@ impl Client {
         headers.insert("Content-Type", HeaderValue::from_static("application/json"));
         let client = ReqwestClient::builder().default_headers(headers).build()?;
 
-        #[cfg(feature = "rate-limiting")]
-        let rate_limiters = global_rate_limit.map_or_else(
-            rate_limit::RateLimiters::new,
-            rate_limit::RateLimiters::with_global,
-        );
-
         Ok(Self {
             host: Url::parse(host)?,
             client,
             #[cfg(feature = "rate-limiting")]
-            rate_limiters: Arc::new(rate_limiters),
+            rate_limiters: Arc::new(rate_limit::RateLimiters::new()),
         })
     }
 
