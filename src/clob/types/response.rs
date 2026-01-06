@@ -722,19 +722,13 @@ pub struct RfqRequest {
     pub request_id: String,
     /// User's address.
     ///
-    /// Some deployments return this as `userAddress`.
-    #[serde(alias = "userAddress")]
-    pub user: Address,
+    pub userAddress: Address,
     /// Proxy address (may be same as user).
     ///
-    /// Some deployments return this as `proxyAddress`.
-    #[serde(alias = "proxyAddress")]
-    pub proxy: Address,
+    pub proxyAddress: Address,
     /// Market condition ID.
     ///
-    /// Some deployments return this as `condition`.
-    #[serde(alias = "condition")]
-    pub market: String,
+    pub condition: String,
     /// Token ID for the outcome token.
     pub token: String,
     /// Complement token ID.
@@ -764,19 +758,13 @@ pub struct RfqQuote {
     pub request_id: String,
     /// Quoter's address.
     ///
-    /// Some deployments return this as `userAddress`.
-    #[serde(alias = "userAddress")]
-    pub user: Address,
+    pub userAddress: Address,
     /// Proxy address (may be same as user).
     ///
-    /// Some deployments return this as `proxyAddress`.
-    #[serde(alias = "proxyAddress")]
-    pub proxy: Address,
+    pub proxyAddress: Address,
     /// Market condition ID.
     ///
-    /// Some deployments return this as `condition`.
-    #[serde(alias = "condition")]
-    pub market: String,
+    pub condition: String,
     /// Token ID for the outcome token.
     pub token: String,
     /// Complement token ID.
