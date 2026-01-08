@@ -352,9 +352,9 @@ sol! {
     /// -->
     #[non_exhaustive]
     #[serde_as]
-    #[derive(Serialize, Debug, Default, PartialEq)]
+    #[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
     struct Order {
-        #[serde(serialize_with = "ser_salt")]
+        #[serde(serialize_with = "ser_salt", deserialize_with = "de_salt")]
         uint256 salt;
         address maker;
         address signer;
@@ -384,6 +384,11 @@ fn ser_salt<S: Serializer>(value: &U256, serializer: S) -> std::result::Result<S
         .try_into()
         .map_err(|e| S::Error::custom(format!("salt does not fit into u64: {e}")))?;
     serializer.serialize_u64(v)
+}
+
+fn de_salt<'de, D: Deserializer<'de>>(deserializer: D) -> std::result::Result<U256, D::Error> {
+    let v: u64 = Deserialize::deserialize(deserializer)?;
+    Ok(U256::from(v))
 }
 
 #[non_exhaustive]

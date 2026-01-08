@@ -38,7 +38,9 @@ use crate::clob::types::response::{
     SpreadsResponse, TickSizeResponse, TotalUserEarningResponse, TradeResponse,
     UserEarningResponse, UserRewardsEarningResponse,
 };
-use crate::clob::types::{SignableOrder, SignatureType, SignedOrder, TickSize};
+use crate::clob::types::{
+    Order, OrderType, Side, SignableOrder, SignatureType, SignedOrder, TickSize,
+};
 use crate::error::{Error, Synchronization};
 use crate::types::Address;
 use crate::{AMOY, POLYGON, Result, Timestamp, ToQueryParams as _, auth, contract_config};
@@ -993,8 +995,8 @@ impl<K: Kind> Client<Authenticated<K>> {
 
     /// Prepares a [`SignableOrder`] for external signing by a browser wallet.
     ///
-    /// This method returns the EIP-712 typed data JSON that can be passed directly to
-    /// `eth_signTypedData_v4` in a browser wallet, along with the serialized order data
+    /// This method returns the EIP-712 typed data that can be serialized to JSON and passed
+    /// to `eth_signTypedData_v4` in a browser wallet, along with the typed order data
     /// needed to submit the signed order via [`Self::post_externally_signed_order`].
     ///
     /// # Arguments
@@ -1017,13 +1019,15 @@ impl<K: Kind> Client<Authenticated<K>> {
     /// // Prepare for external signing
     /// let signing_data = client.prepare_for_external_signing(&order, 137).await?;
     ///
-    /// // Send signing_data.typed_data to browser for wallet signing
-    /// // Browser returns signature
+    /// // Serialize typed_data to JSON for browser
+    /// let typed_data_json = serde_json::to_string(&signing_data.typed_data)?;
+    /// // Send to browser for wallet signing, browser returns signature
     ///
     /// // Submit the signed order
     /// let response = client
     ///     .post_externally_signed_order(
-    ///         serde_json::from_str(&signing_data.order_data)?,
+    ///         signing_data.order,
+    ///         signing_data.order_type,
     ///         &signature,
     ///     )
     ///     .await?;
@@ -1048,22 +1052,12 @@ impl<K: Kind> Client<Authenticated<K>> {
             ..Eip712Domain::default()
         };
 
-        // Use alloy's TypedData to generate the EIP-712 JSON structure
         let typed_data = TypedData::from_struct(&signable.order, Some(domain));
-        let typed_data_json = serde_json::to_string(&typed_data)
-            .map_err(|e| Error::validation(format!("Failed to serialize typed data: {e}")))?;
-
-        // Build opaque order_data blob for passing back to post_externally_signed_order
-        let order_data = json!({
-            "order": typed_data.message,
-            "orderType": signable.order_type
-        });
-        let order_data_json = serde_json::to_string(&order_data)
-            .map_err(|e| Error::validation(format!("Failed to serialize order data: {e}")))?;
 
         Ok(ExternalSigningData {
-            typed_data: typed_data_json,
-            order_data: order_data_json,
+            typed_data,
+            order: signable.order.clone(),
+            order_type: signable.order_type,
         })
     }
 
@@ -1092,12 +1086,13 @@ impl<K: Kind> Client<Authenticated<K>> {
     /// Posts an order that was signed externally (e.g., by a browser wallet).
     ///
     /// This method is useful for applications where orders are built server-side but signed
-    /// by the user's wallet in a browser context. Parse the `order_data` from
-    /// [`ExternalSigningData`] and pass it along with the signature from the wallet.
+    /// by the user's wallet in a browser context. Use the `order` and `order_type` from
+    /// [`ExternalSigningData`] along with the signature from the wallet.
     ///
     /// # Arguments
     ///
-    /// * `order_data` - The parsed `order_data` JSON from [`ExternalSigningData`]
+    /// * `order` - The [`Order`] from [`ExternalSigningData`]
+    /// * `order_type` - The [`OrderType`] from [`ExternalSigningData`]
     /// * `signature` - The wallet signature (hex string, e.g., "0x...")
     ///
     /// # Example
@@ -1105,57 +1100,51 @@ impl<K: Kind> Client<Authenticated<K>> {
     /// ```rust,ignore
     /// // Server builds order and sends signing_data to browser
     /// let signing_data = client.prepare_for_external_signing(&order, chain_id).await?;
-    /// // Browser signs signing_data.typed_data, returns signature
+    /// // Serialize typed_data for browser: serde_json::to_string(&signing_data.typed_data)?
+    /// // Browser signs, returns signature
     /// // Server submits:
-    /// let order_data: serde_json::Value = serde_json::from_str(&signing_data.order_data)?;
     /// let response = client
-    ///     .post_externally_signed_order(order_data, "0x...")
+    ///     .post_externally_signed_order(
+    ///         signing_data.order,
+    ///         signing_data.order_type,
+    ///         "0x...",
+    ///     )
     ///     .await?;
     /// ```
     pub async fn post_externally_signed_order(
         &self,
-        order_data: serde_json::Value,
+        order: Order,
+        order_type: OrderType,
         signature: &str,
     ) -> Result<PostOrderResponse> {
-        let mut order_inner = order_data
-            .get("order")
-            .ok_or_else(|| Error::validation("order_data missing 'order' field"))?
-            .clone();
+        // Serialize the order to JSON and inject signature + convert side
+        let mut order_json = serde_json::to_value(&order)
+            .map_err(|e| Error::validation(format!("Failed to serialize order: {e}")))?;
 
-        let order_type = order_data
-            .get("orderType")
-            .ok_or_else(|| Error::validation("order_data missing 'orderType' field"))?
-            .clone();
-
-        // Inject signature into the order object
-        if let Some(map) = order_inner.as_object_mut() {
+        if let Some(map) = order_json.as_object_mut() {
+            // Inject signature
             map.insert(
                 "signature".to_owned(),
                 serde_json::Value::String(signature.to_owned()),
             );
 
-            // Convert numeric side to string if needed (CLOB expects "BUY"/"SELL")
-            if let Some(side_value) = map.get_mut("side")
-                && let Some(side_num) = side_value.as_u64()
-            {
-                let side_str = match side_num {
-                    0 => "BUY",
-                    1 => "SELL",
-                    _ => return Err(Error::validation("side must be 0 or 1")),
-                };
-                *side_value = serde_json::Value::String(side_str.to_owned());
-            }
+            // Convert numeric side to string (CLOB expects "BUY"/"SELL")
+            let side = Side::try_from(order.side)?;
+            map.insert(
+                "side".to_owned(),
+                serde_json::Value::String(side.to_string()),
+            );
         }
 
         // Build the order payload
-        let order = json!({
-            "order": order_inner,
+        let payload = json!({
+            "order": order_json,
             "owner": self.state().credentials.key.to_string(),
             "orderType": order_type
         });
 
         // Wrap in array (API expects array of orders)
-        let orders = serde_json::Value::Array(vec![order]);
+        let orders = serde_json::Value::Array(vec![payload]);
 
         let request = self
             .client()

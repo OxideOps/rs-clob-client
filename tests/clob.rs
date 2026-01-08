@@ -3003,7 +3003,6 @@ mod builder_authenticated {
 }
 
 mod external_signing {
-    use alloy::dyn_abi::TypedData;
     use alloy::hex;
     use alloy::signers::Signer as _;
     use alloy::signers::local::LocalSigner;
@@ -3039,8 +3038,8 @@ mod external_signing {
             .prepare_for_external_signing(&signable_order, POLYGON)
             .await?;
 
-        // Verify typed_data is valid JSON with EIP-712 structure
-        let typed_data: serde_json::Value = serde_json::from_str(&signing_data.typed_data)?;
+        // Verify typed_data has valid EIP-712 structure
+        let typed_data: serde_json::Value = serde_json::to_value(&signing_data.typed_data)?;
 
         // Verify primaryType is "Order"
         assert_eq!(typed_data["primaryType"], "Order");
@@ -3105,7 +3104,7 @@ mod external_signing {
             .prepare_for_external_signing(&signable_order, POLYGON)
             .await?;
 
-        let typed_data: serde_json::Value = serde_json::from_str(&signing_data.typed_data)?;
+        let typed_data: serde_json::Value = serde_json::to_value(&signing_data.typed_data)?;
         let domain = &typed_data["domain"];
 
         assert_eq!(domain["name"], "Polymarket CTF Exchange");
@@ -3142,32 +3141,34 @@ mod external_signing {
             .await?;
 
         // Verify order can be extracted from typed_data.message
-        let typed_data: serde_json::Value = serde_json::from_str(&signing_data.typed_data)?;
-        let order = &typed_data["message"];
+        let typed_data: serde_json::Value = serde_json::to_value(&signing_data.typed_data)?;
+        let message = &typed_data["message"];
 
         // Verify field existence and key values
-        assert!(order.get("salt").is_some());
-        assert!(order.get("maker").is_some());
-        assert!(order.get("signer").is_some());
+        assert!(message.get("salt").is_some());
+        assert!(message.get("maker").is_some());
+        assert!(message.get("signer").is_some());
 
         // Verify tokenId matches input
-        assert_eq!(order["tokenId"], TOKEN_1);
+        assert_eq!(message["tokenId"], TOKEN_1);
 
         // Verify side is 0 (BUY)
-        assert_eq!(order["side"], 0);
+        assert_eq!(message["side"], 0);
 
         // Verify amounts are present and non-zero (price=0.50, size=100)
-        assert!(order.get("makerAmount").is_some());
-        assert!(order.get("takerAmount").is_some());
+        assert!(message.get("makerAmount").is_some());
+        assert!(message.get("takerAmount").is_some());
 
         // Verify signatureType is present
-        assert!(order.get("signatureType").is_some());
+        assert!(message.get("signatureType").is_some());
 
-        // Verify order_data contains orderType and order matches typed_data.message
-        let order_data: serde_json::Value = serde_json::from_str(&signing_data.order_data)?;
-        assert_eq!(order_data["orderType"], "GTC");
-        assert_eq!(order_data["order"]["tokenId"], TOKEN_1);
-        assert_eq!(order_data["order"]["side"], 0);
+        // Verify order and order_type are returned separately
+        assert_eq!(signing_data.order.tokenId.to_string(), TOKEN_1);
+        assert_eq!(signing_data.order.side, 0); // BUY
+        assert_eq!(
+            signing_data.order_type,
+            polymarket_client_sdk::clob::types::OrderType::GTC
+        );
 
         Ok(())
     }
@@ -3217,9 +3218,8 @@ mod external_signing {
             .prepare_for_external_signing(&signable_order, POLYGON)
             .await?;
 
-        // Parse the typed data and compute its hash
-        let typed_data: TypedData = serde_json::from_str(&signing_data.typed_data)?;
-        let external_hash = typed_data.eip712_signing_hash()?;
+        // Compute the hash directly from typed_data (now a TypedData struct)
+        let external_hash = signing_data.typed_data.eip712_signing_hash()?;
 
         // Sign the order using the internal sign method - this uses eip712_signing_hash internally
         let signed_order = client.sign(&signer, signable_order).await?;
@@ -3279,9 +3279,12 @@ mod external_signing {
 
         let fake_signature = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1b";
 
-        let order_json: serde_json::Value = serde_json::from_str(&signing_data.order_data)?;
         let response = client
-            .post_externally_signed_order(order_json, fake_signature)
+            .post_externally_signed_order(
+                signing_data.order,
+                signing_data.order_type,
+                fake_signature,
+            )
             .await?;
 
         assert!(response.success);
@@ -3313,11 +3316,10 @@ mod external_signing {
             .prepare_for_external_signing(&signable_order, POLYGON)
             .await?;
 
-        // Verify the order_data.order has numeric side (0 for BUY)
-        let order_data: serde_json::Value = serde_json::from_str(&signing_data.order_data)?;
+        // Verify the order has numeric side (0 for BUY)
         assert_eq!(
-            order_data["order"]["side"], 0,
-            "order_data should have numeric side"
+            signing_data.order.side, 0,
+            "order should have numeric side 0 for BUY"
         );
 
         // Mock verifies the request body contains string "BUY" (not numeric 0)
@@ -3345,7 +3347,11 @@ mod external_signing {
         let fake_signature = "0x1234";
 
         let response = client
-            .post_externally_signed_order(order_data, fake_signature)
+            .post_externally_signed_order(
+                signing_data.order,
+                signing_data.order_type,
+                fake_signature,
+            )
             .await?;
 
         assert!(response.success);
@@ -3375,11 +3381,10 @@ mod external_signing {
             .prepare_for_external_signing(&signable_order, POLYGON)
             .await?;
 
-        // Verify the order_data.order has numeric side (1 for SELL)
-        let order_data: serde_json::Value = serde_json::from_str(&signing_data.order_data)?;
+        // Verify the order has numeric side (1 for SELL)
         assert_eq!(
-            order_data["order"]["side"], 1,
-            "order_data should have numeric side 1 for SELL"
+            signing_data.order.side, 1,
+            "order should have numeric side 1 for SELL"
         );
 
         // Mock verifies the request body contains string "SELL" (not numeric 1)
@@ -3407,7 +3412,11 @@ mod external_signing {
         let fake_signature = "0x1234";
 
         let response = client
-            .post_externally_signed_order(order_data, fake_signature)
+            .post_externally_signed_order(
+                signing_data.order,
+                signing_data.order_type,
+                fake_signature,
+            )
             .await?;
 
         assert!(response.success);
@@ -3437,13 +3446,6 @@ mod external_signing {
             .prepare_for_external_signing(&signable_order, POLYGON)
             .await?;
 
-        // Verify order_data doesn't have owner initially
-        let order_data: serde_json::Value = serde_json::from_str(&signing_data.order_data)?;
-        assert!(
-            order_data.get("owner").is_none(),
-            "order_data should not have owner initially"
-        );
-
         // Mock verifies the request body contains the injected owner from credentials
         let expected_owner = format!(r#""owner":"{API_KEY}""#);
         let mock = server.mock(|when, then| {
@@ -3469,7 +3471,11 @@ mod external_signing {
         let fake_signature = "0x1234";
 
         let _response: PostOrderResponse = client
-            .post_externally_signed_order(order_data, fake_signature)
+            .post_externally_signed_order(
+                signing_data.order,
+                signing_data.order_type,
+                fake_signature,
+            )
             .await?;
 
         mock.assert();
@@ -3477,55 +3483,8 @@ mod external_signing {
         Ok(())
     }
 
-    #[tokio::test]
-    async fn post_externally_signed_order_should_fail_without_order_field() -> anyhow::Result<()> {
-        let server = MockServer::start();
-        let client = create_authenticated(&server).await?;
-
-        let invalid_order_data = json!({
-            "orderType": "GTC"
-            // missing "order" field
-        });
-
-        let result = client
-            .post_externally_signed_order(invalid_order_data, "0x1234")
-            .await;
-
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(
-            matches!(err.kind(), polymarket_client_sdk::error::Kind::Validation),
-            "should be validation error"
-        );
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn post_externally_signed_order_should_fail_with_invalid_side() -> anyhow::Result<()> {
-        let server = MockServer::start();
-        let client = create_authenticated(&server).await?;
-
-        let invalid_order_data = json!({
-            "order": {
-                "side": 99  // invalid side value
-            },
-            "orderType": "GTC"
-        });
-
-        let result = client
-            .post_externally_signed_order(invalid_order_data, "0x1234")
-            .await;
-
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(
-            matches!(err.kind(), polymarket_client_sdk::error::Kind::Validation),
-            "should be validation error"
-        );
-
-        Ok(())
-    }
+    // Note: Tests for missing order field and invalid side are no longer needed
+    // since the API now takes typed Order and OrderType parameters
 
     #[tokio::test]
     async fn external_signing_roundtrip_should_succeed() -> anyhow::Result<()> {
@@ -3572,9 +3531,8 @@ mod external_signing {
             .prepare_for_external_signing(&signable_order, POLYGON)
             .await?;
 
-        // Step 3: "External" signing - parse typed data and sign the hash
-        let typed_data: TypedData = serde_json::from_str(&signing_data.typed_data)?;
-        let hash = typed_data.eip712_signing_hash()?;
+        // Step 3: "External" signing - sign the hash from typed_data
+        let hash = signing_data.typed_data.eip712_signing_hash()?;
         let signature = signer.sign_hash(&hash).await?;
         let signature_hex = format!("0x{}", hex::encode(signature.as_bytes()));
 
@@ -3595,9 +3553,12 @@ mod external_signing {
             }]));
         });
 
-        let order_json: serde_json::Value = serde_json::from_str(&signing_data.order_data)?;
         let response = client
-            .post_externally_signed_order(order_json, &signature_hex)
+            .post_externally_signed_order(
+                signing_data.order,
+                signing_data.order_type,
+                &signature_hex,
+            )
             .await?;
 
         assert!(response.success);

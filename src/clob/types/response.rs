@@ -5,6 +5,7 @@
 
 use std::collections::HashMap;
 
+use alloy::dyn_abi::TypedData;
 use bon::Builder;
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Deserializer, Serialize};
@@ -13,7 +14,7 @@ use sha2::{Digest as _, Sha256};
 
 use crate::Result;
 use crate::auth::ApiKey;
-use crate::clob::types::{OrderStatusType, OrderType, Side, TickSize, TraderSide};
+use crate::clob::types::{Order, OrderStatusType, OrderType, Side, TickSize, TraderSide};
 use crate::serde_helpers::StringFromAny;
 use crate::types::{Address, Decimal};
 
@@ -283,13 +284,14 @@ pub struct PostOrderResponse {
 /// This is returned by [`Client::prepare_for_external_signing`] and contains everything
 /// needed for a browser wallet to sign an order via `eth_signTypedData_v4`.
 #[non_exhaustive]
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct ExternalSigningData {
-    /// EIP-712 typed data JSON string, ready to be passed to `eth_signTypedData_v4`.
-    pub typed_data: String,
-    /// Opaque order data to pass back to [`Client::post_externally_signed_order`].
-    /// Contains the order parameters and metadata needed to submit the signed order.
-    pub order_data: String,
+    /// EIP-712 typed data for signing. Serialize this to JSON for `eth_signTypedData_v4`.
+    pub typed_data: TypedData,
+    /// The order to be signed and submitted.
+    pub order: Order,
+    /// The order type (GTC, FOK, etc.).
+    pub order_type: OrderType,
 }
 
 pub fn empty_string_as_zero<'de, D>(deserializer: D) -> std::result::Result<Decimal, D::Error>
