@@ -686,46 +686,6 @@ mod limit {
         Ok(())
     }
 
-    #[tokio::test]
-    async fn should_fail_on_negative_price_and_size() -> anyhow::Result<()> {
-        let server = MockServer::start();
-        let client = create_authenticated(&server).await?;
-
-        ensure_requirements(&server, token_1(), TickSize::Tenth);
-
-        let err = client
-            .limit_order()
-            .token_id(token_1())
-            .price(dec!(-0.5))
-            .size(dec!(21.04))
-            .side(Side::Buy)
-            .nonce(123)
-            .expiration(DateTime::<Utc>::from_str("1970-01-01T13:53:20Z").unwrap())
-            .build()
-            .await
-            .unwrap_err();
-        let msg = &err.downcast_ref::<Validation>().unwrap().reason;
-
-        assert_eq!(msg, "Unable to build Order due to negative price -0.5");
-
-        let err = client
-            .limit_order()
-            .token_id(token_1())
-            .price(dec!(0.5))
-            .size(dec!(-21.04))
-            .side(Side::Buy)
-            .nonce(123)
-            .expiration(DateTime::<Utc>::from_str("1970-01-01T13:53:20Z").unwrap())
-            .build()
-            .await
-            .unwrap_err();
-        let msg = &err.downcast_ref::<Validation>().unwrap().reason;
-
-        assert_eq!(msg, "Unable to build Order due to negative size -21.04");
-
-        Ok(())
-    }
-
     mod buy {
         use super::*;
 

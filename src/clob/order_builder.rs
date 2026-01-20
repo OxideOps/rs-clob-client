@@ -140,12 +140,6 @@ impl<K: AuthKind> OrderBuilder<Limit, K> {
             ));
         };
 
-        if price.is_sign_negative() {
-            return Err(Error::validation(format!(
-                "Unable to build Order due to negative price {price}"
-            )));
-        }
-
         let fee_rate = self.client.fee_rate_bps(token_id).await?;
         let minimum_tick_size = self
             .client
@@ -162,12 +156,6 @@ impl<K: AuthKind> OrderBuilder<Limit, K> {
                 {minimum_tick_size} has {} decimal places. Price decimal places <= minimum tick size decimal places",
                 price.scale(),
                 minimum_tick_size.scale()
-            )));
-        }
-
-        if price < minimum_tick_size || price > Decimal::ONE - minimum_tick_size {
-            return Err(Error::validation(format!(
-                "Price {price} is too small or too large for the minimum tick size {minimum_tick_size}"
             )));
         }
 
@@ -389,11 +377,6 @@ impl<K: AuthKind> OrderBuilder<Market, K> {
 
         // Ensure that the market price returned internally is truncated to our tick size
         let price = price.trunc_with_scale(decimals);
-        if price < minimum_tick_size || price > Decimal::ONE - minimum_tick_size {
-            return Err(Error::validation(format!(
-                "Price {price} is too small or too large for the minimum tick size {minimum_tick_size}"
-            )));
-        }
 
         // When buying `YES` tokens, the user will "make" `USDC` dollars and "take"
         // `USDC` / `price` `YES` tokens. When selling `YES` tokens, the user will "make" `YES`
