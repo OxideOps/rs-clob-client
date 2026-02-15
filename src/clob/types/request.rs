@@ -70,12 +70,14 @@ pub struct LastTradePriceRequest {
 }
 
 #[non_exhaustive]
+#[serde_as]
 #[skip_serializing_none]
 #[derive(Debug, Serialize, Builder)]
 #[builder(on(String, into))]
 pub struct PriceHistoryRequest {
-    /// The market condition ID.
-    pub market: B256,
+    /// The CLOB token ID.
+    #[serde_as(as = "DisplayFromStr")]
+    pub market: U256,
     /// The time range for the price history query.
     /// Either a predefined interval or explicit start/end timestamps.
     #[serde(flatten)]
